@@ -33,9 +33,10 @@ export class MultiSpinner {
     this.initializeTasks(tasks);
   }
   initializeTasks(tasks) {
-    tasks.forEach((task, index) => {
+    tasks.forEach((task, defaultIndex) => {
       if (!task.disabled) {
-        this.spinners.set(String(index), {
+        const index = task.index !== void 0 ? task.index : defaultIndex;
+        this.spinners.set(index, {
           frame: 0,
           message: task.title,
           status: "pending",
@@ -55,7 +56,8 @@ export class MultiSpinner {
     this.interval = setInterval(() => this.render(), 80);
     return new Promise((resolve) => {
       this.resolveAllTasks = resolve;
-      this.tasks.forEach((task, index) => {
+      this.tasks.forEach((task, defaultIndex) => {
+        const index = task.index !== void 0 ? task.index : defaultIndex;
         this.taskPromises.push(this.executeTask(task, index));
       });
     });
@@ -77,7 +79,7 @@ export class MultiSpinner {
    * @param message - The new message to display
    */
   update(index, message) {
-    const spinner = this.spinners.get(String(index));
+    const spinner = this.spinners.get(index);
     if (spinner) {
       spinner.message = message;
     }
@@ -88,7 +90,7 @@ export class MultiSpinner {
    * @param message - Optional message to display
    */
   succeed(index, message) {
-    const spinner = this.spinners.get(String(index));
+    const spinner = this.spinners.get(index);
     if (spinner) {
       spinner.status = "success";
       if (message) spinner.message = message;
@@ -100,7 +102,7 @@ export class MultiSpinner {
    * @param message - Optional error message to display
    */
   fail(index, message) {
-    const spinner = this.spinners.get(String(index));
+    const spinner = this.spinners.get(index);
     if (spinner) {
       spinner.status = "error";
       if (message) spinner.message = message;
@@ -114,8 +116,8 @@ export class MultiSpinner {
     if (!this.hasPendingTasks()) {
       return;
     }
-    const newIndex = this.spinners.size;
-    this.spinners.set(String(newIndex), {
+    const newIndex = task.index !== void 0 ? task.index : this.spinners.size;
+    this.spinners.set(newIndex, {
       frame: 0,
       message: task.title,
       status: "pending",
@@ -150,7 +152,10 @@ export class MultiSpinner {
     if (!this.isRunning) {
       return;
     }
-    const output = Array.from(this.spinners.values()).map((spinner) => {
+    const sortedSpinners = Array.from(this.spinners.entries()).sort(
+      ([a], [b]) => a - b
+    );
+    const output = sortedSpinners.map(([_, spinner]) => {
       const frame = frames[spinner.frame];
       spinner.frame = (spinner.frame + 1) % frames.length;
       const statusSymbol = spinner.statusSymbol ? spinner.statusSymbol : spinner.status === "success" ? S_STEP_SUBMIT : spinner.status === "error" ? S_STEP_ERROR : frame;
@@ -171,6 +176,7 @@ function test() {
   const initialTasks = [
     {
       title: "Task 1",
+      index: 1e3,
       task: async (message) => {
         await sleep(2);
         message("Task 1 is halfway done");
@@ -179,7 +185,7 @@ function test() {
       }
     },
     {
-      title: "Empty Task",
+      title: "Task 2: Empty Task",
       task: async (message) => {
       }
     },
@@ -210,40 +216,29 @@ function test() {
   }, 1e3);
   setTimeout(() => {
     multiSpinner.addTask({
-      title: "Task Alpha",
+      title: "Task 4 with failure",
       task: async (message) => {
         await sleep(1);
-        message("Task Alpha is executing");
+        message("Task with failure is executing");
         await sleep(1);
-        throw new Error("Task Alpha failed");
+        throw new Error("Random error");
       }
     });
   }, 2e3);
   setTimeout(() => {
     multiSpinner.addTask({
-      title: "Task Beta",
+      title: "Task 5 added late",
       task: async (message) => {
         await sleep(1);
-        message("Task Beta is executing");
+        message("Task 5 is executing");
         await sleep(1);
-        return "Task Beta done";
+        return "Task 5 done";
       }
     });
   }, 3500);
   setTimeout(() => {
     multiSpinner.addTask({
-      title: "Task 4 (Added)",
-      task: async (message) => {
-        await sleep(1);
-        message("Task 4 is executing");
-        await sleep(1);
-        return "Task 4 done";
-      }
-    });
-  }, 3e3);
-  setTimeout(() => {
-    multiSpinner.addTask({
-      title: "Task 5 (Should not be added)",
+      title: "Task Too late (Should not be added)",
       task: async (message) => {
         await sleep(1);
         return "This task should not run";
