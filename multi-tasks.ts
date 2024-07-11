@@ -13,43 +13,70 @@ const frames = unicode ? ['◒', '◐', '◓', '◑'] : ['•', 'o', 'O', '0'];
 
 export interface Task {
   title: string;
-  task: (message: (string: string) => void) => string | Promise<string> | void | Promise<void>;
+  task: (message: (msg: string) => void) => Promise<string | void>;
   enabled?: boolean;
 }
 
-class MultiSpinner {
-  private spinners: Map<string, {
-    frame: number;
-    message: string;
-    status: 'pending' | 'success' | 'error';
-  }> = new Map();
-  private interval: NodeJS.Timeout | null = null;
-  private previousRenderedLines: number = 0;
+interface Spinner {
+  frame: number;
+  message: string;
+  status: "pending" | "success" | "error";
+}
 
-  constructor(private tasks: Task[]) {
-    this.tasks.forEach((task, index) => {
+export class MultiSpinner {
+  private tasks: Task[];
+  private spinners: Map<string, Spinner>;
+  private interval: NodeJS.Timeout | null;
+  private previousRenderedLines: number;
+  private isRunning: boolean;
+  private taskPromises: Promise<void>[];
+  private resolveAllTasks: (() => void) | null;
+
+  constructor(tasks: Task[]) {
+    this.tasks = tasks;
+    this.spinners = new Map();
+    this.interval = null;
+    this.previousRenderedLines = 0;
+    this.isRunning = false;
+    this.taskPromises = [];
+    this.resolveAllTasks = null;
+
+    this.initializeTasks(tasks);
+  }
+
+  private initializeTasks(tasks: Task[]): void {
+    tasks.forEach((task, index) => {
       if (task.enabled !== false) {
         this.spinners.set(String(index), {
           frame: 0,
           message: task.title,
-          status: 'pending'
+          status: "pending",
         });
       }
     });
   }
 
-  start() {
-    process.stdout.write('\n');
+  start(): Promise<void> {
+    this.isRunning = true;
+    process.stdout.write("\n");
     this.render();
     this.interval = setInterval(() => this.render(), 80);
+
+    return new Promise<void>((resolve) => {
+      this.resolveAllTasks = resolve;
+      this.tasks.forEach((task, index) => {
+        this.taskPromises.push(this.executeTask(task, index));
+      });
+    });
   }
 
-  stop() {
+  stop(): void {
+    this.isRunning = false;
     if (this.interval) {
       clearInterval(this.interval);
     }
     this.render();
-    process.stdout.write('\n'); // Add a newline after all tasks are completed
+    process.stdout.write("\n");
   }
 
   update(index: number, message: string) {
@@ -62,7 +89,7 @@ class MultiSpinner {
   succeed(index: number, message?: string) {
     const spinner = this.spinners.get(String(index));
     if (spinner) {
-      spinner.status = 'success';
+      spinner.status = "success";
       if (message) spinner.message = message;
     }
   }
@@ -70,72 +97,184 @@ class MultiSpinner {
   fail(index: number, message?: string) {
     const spinner = this.spinners.get(String(index));
     if (spinner) {
-      spinner.status = 'error';
+      spinner.status = "error";
       if (message) spinner.message = message;
     }
   }
 
-  private render() {
-    const output: string[] = [];
+  addTask(task: Task): void {
+    if (this.hasPendingTasks()) {
+      const newIndex = this.spinners.size;
+      this.spinners.set(String(newIndex), {
+        frame: 0,
+        message: task.title,
+        status: "pending",
+      });
+      this.tasks.push(task);
 
-    for (const [, spinner] of this.spinners) {
-      let symbol: string;
-      switch (spinner.status) {
-        case 'success':
-          symbol = color.green(S_STEP_SUBMIT);
-          break;
-        case 'error':
-          symbol = color.red(S_STEP_ERROR);
-          break;
-        default:
-          symbol = color.magenta(frames[spinner.frame]);
-          spinner.frame = (spinner.frame + 1) % frames.length;
+      // If the spinner is already running, start the new task immediately
+      if (this.isRunning) {
+        this.taskPromises.push(this.executeTask(task, newIndex));
       }
-      output.push(`${symbol}  ${spinner.message}`);
+    }
+  }
+
+  private hasPendingTasks(): boolean {
+    return Array.from(this.spinners.values()).some(
+      (spinner) => spinner.status === "pending"
+    );
+  }
+
+  async executeTask(task: Task, index: number): Promise<void> {
+    const updateMessage = (message: string) => {
+      this.update(index, message);
+    };
+
+    try {
+      const result = await task.task(updateMessage);
+      this.succeed(index, result || task.title);
+    } catch (error) {
+      this.fail(index, `${task.title} (Error: ${(error as Error).message})`);
     }
 
-    // Move cursor to the start of the spinner area
-    process.stdout.write(cursor.move(-999, -this.previousRenderedLines));
-    
-    // Erase the previous render
-    process.stdout.write(erase.down());  // Fixed: Call erase.down() as a function
-
-    // Write the new render
-    process.stdout.write(output.join('\n'));
-
-    // Update the number of lines we've rendered
-    this.previousRenderedLines = output.length;
-
-    // Move the cursor below the spinner area
-    process.stdout.write(cursor.move(0, output.length));
+    if (!this.hasPendingTasks() && this.resolveAllTasks) {
+      this.render(); // Final call to render.
+      this.resolveAllTasks();
+    }
   }
+
+  private render(): void {
+    if (!this.isRunning) {
+      return;
+    }
+  
+    const output = Array.from(this.spinners.values())
+      .map((spinner) => {
+        const frame = frames[spinner.frame];
+        spinner.frame = (spinner.frame + 1) % frames.length;
+        const statusSymbol =
+          spinner.status === "success" ? S_STEP_SUBMIT : spinner.status === "error" ? S_STEP_ERROR : frame;
+        return `${statusSymbol}  ${spinner.message}`;
+      })
+      .join("\n");
+  
+    // Clear previous lines
+    if (this.previousRenderedLines > 0) {
+      process.stdout.write(erase.lines(this.previousRenderedLines));
+    }
+    process.stdout.write(cursor.to(0, 0));
+    process.stdout.write(output);
+  
+    this.previousRenderedLines = output.split("\n").length;
+  }
+  
 }
 
-export const tasks = async (tasks: Task[]) => {
-  const multiSpinner = new MultiSpinner(tasks);
-  multiSpinner.start();
 
-  try {
-    await Promise.all(tasks.map(async (task, index) => {
-      if (task.enabled === false) return;
 
-      const updateMessage = (message: string) => {
-        multiSpinner.update(index, message);
-      };
-
-      try {
-        const result = await task.task(updateMessage);
-        multiSpinner.succeed(index, result || task.title);
-      } catch (error) {
-        multiSpinner.fail(index, `${task.title} (Error: ${error.message})`);
-      }
-    }));
-  } finally {
-    multiSpinner.stop();
-  }
-};
-
-// Helper function for creating delays (not part of the core implementation)
-export function sleep(seconds: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, seconds * 1000));
+///// Tests /////
+function sleep(seconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, seconds * 1000));
 }
+
+function test() {
+  const initialTasks: Task[] = [
+    {
+      title: "Task 1",
+      task: async (message) => {
+        await sleep(2);
+        message("Task 1 is halfway done");
+        await sleep(2);
+        return "Task 1 completed successfully";
+      },
+    },
+    {
+      title: "Task 2",
+      task: async (message) => {
+        await sleep(1);
+        message("Task 2 is progressing");
+        await sleep(2);
+        return "Task 2 finished";
+      },
+    },
+  ];
+
+  const multiSpinner = new MultiSpinner(initialTasks);
+
+  // Start the spinner and get the promise
+  const allTasksPromise = multiSpinner.start();
+
+  // Add a new task after 1 second
+  setTimeout(() => {
+    multiSpinner.addTask({
+      title: "Task 3 (Added)",
+      task: async (message) => {
+        await sleep(1);
+        message("Task 3 is running");
+        await sleep(2);
+        return "Task 3 completed";
+      },
+    });
+  }, 1000);
+
+  // Add another task after 2 seconds
+  setTimeout(() => {
+    multiSpinner.addTask({
+      title: "Task Alpha",
+      task: async (message) => {
+        await sleep(1);
+        message("Task Alpha is executing");
+        await sleep(1);
+        throw new Error("Task Alpha failed");
+      },
+    });
+  }, 2000);
+
+  setTimeout(() => {
+    multiSpinner.addTask({
+      title: "Task Beta",
+      task: async (message) => {
+        await sleep(1);
+        message("Task Beta is executing");
+        await sleep(1);
+        return "Task Beta done";
+      },
+    });
+  }, 3500);
+
+  // Add another task after 3 seconds
+  setTimeout(() => {
+    multiSpinner.addTask({
+      title: "Task 4 (Added)",
+      task: async (message) => {
+        await sleep(1);
+        message("Task 4 is executing");
+        await sleep(1);
+        return "Task 4 done";
+      },
+    });
+  }, 3000);
+
+  // Try to add a task after all tasks are completed (should have no effect)
+  setTimeout(() => {
+    multiSpinner.addTask({
+      title: "Task 5 (Should not be added)",
+      task: async (message) => {
+        await sleep(1);
+        return "This task should not run";
+      },
+    });
+  }, 6000);
+
+  // Wait for all tasks to complete
+  allTasksPromise
+    .then(() => {
+      console.log("\nAll tasks completed!");
+      multiSpinner.stop();
+    })
+    .catch((error) => {
+      console.error("\nAn error occurred:", error);
+      multiSpinner.stop();
+    });
+}
+test();
