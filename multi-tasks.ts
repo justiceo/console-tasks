@@ -22,8 +22,8 @@ export interface Task {
    * It takes one parameter: a function that is used to update the displayed message for this task.
    */
   task: (message: (msg: string) => void) => Promise<string | void>;
-  /** Whether the task is enabled (default: true) */
-  enabled?: boolean;
+  /** Whether the task is disabled (default: false) */
+  disabled?: boolean;
   /** Custom status symbol to display instead of the spinner */
   statusSymbol?: string;
 }
@@ -68,7 +68,7 @@ export class MultiSpinner {
 
   private initializeTasks(tasks: Task[]): void {
     tasks.forEach((task, index) => {
-      if (task.enabled !== false) {
+      if (!task.disabled) {
         this.spinners.set(String(index), {
           frame: 0,
           message: task.title,
@@ -152,20 +152,24 @@ export class MultiSpinner {
    * @param task - The task to add
    */
   addTask(task: Task): void {
-    if (this.hasPendingTasks()) {
-      const newIndex = this.spinners.size;
-      this.spinners.set(String(newIndex), {
-        frame: 0,
-        message: task.title,
-        status: "pending",
-        statusSymbol: task.statusSymbol,
-      });
-      this.tasks.push(task);
 
-      // If the spinner is already running, start the new task immediately
-      if (this.isRunning) {
-        this.taskPromises.push(this.executeTask(task, newIndex));
-      }
+    // Only add the task if the spinner is running.
+    if (!this.hasPendingTasks()) {
+      return;
+    }
+
+    const newIndex = this.spinners.size;
+    this.spinners.set(String(newIndex), {
+      frame: 0,
+      message: task.title,
+      status: "pending",
+      statusSymbol: task.statusSymbol,
+    });
+    this.tasks.push(task);
+
+    // If the spinner is already running, start the new task immediately
+    if (this.isRunning) {
+      this.taskPromises.push(this.executeTask(task, newIndex));
     }
   }
 
@@ -241,12 +245,17 @@ function test() {
       },
     },
     {
-      title: "Task 2",
+      title: "Empty Task",
+      task: async (message) => {},
+    },
+    {
+      title: "Task Disabled",
+      disabled: true,
       task: async (message) => {
         await sleep(1);
-        message("Task 2 is progressing");
+        message("This task should not run");
         await sleep(2);
-        return "Task 2 finished";
+        return "Disabled Task finished";
       },
     },
   ];

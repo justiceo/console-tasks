@@ -34,7 +34,7 @@ export class MultiSpinner {
   }
   initializeTasks(tasks) {
     tasks.forEach((task, index) => {
-      if (task.enabled !== false) {
+      if (!task.disabled) {
         this.spinners.set(String(index), {
           frame: 0,
           message: task.title,
@@ -111,18 +111,19 @@ export class MultiSpinner {
    * @param task - The task to add
    */
   addTask(task) {
-    if (this.hasPendingTasks()) {
-      const newIndex = this.spinners.size;
-      this.spinners.set(String(newIndex), {
-        frame: 0,
-        message: task.title,
-        status: "pending",
-        statusSymbol: task.statusSymbol
-      });
-      this.tasks.push(task);
-      if (this.isRunning) {
-        this.taskPromises.push(this.executeTask(task, newIndex));
-      }
+    if (!this.hasPendingTasks()) {
+      return;
+    }
+    const newIndex = this.spinners.size;
+    this.spinners.set(String(newIndex), {
+      frame: 0,
+      message: task.title,
+      status: "pending",
+      statusSymbol: task.statusSymbol
+    });
+    this.tasks.push(task);
+    if (this.isRunning) {
+      this.taskPromises.push(this.executeTask(task, newIndex));
     }
   }
   hasPendingTasks() {
@@ -178,12 +179,18 @@ function test() {
       }
     },
     {
-      title: "Task 2",
+      title: "Empty Task",
+      task: async (message) => {
+      }
+    },
+    {
+      title: "Task Disabled",
+      disabled: true,
       task: async (message) => {
         await sleep(1);
-        message("Task 2 is progressing");
+        message("This task should not run");
         await sleep(2);
-        return "Task 2 finished";
+        return "Disabled Task finished";
       }
     }
   ];
