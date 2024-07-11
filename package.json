@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
+    "start": "node_modules/.bin/esbuild index.ts > index.js; node ./test.js",
+    "tasks": "node_modules/.bin/esbuild multi-tasks.ts > multi-tasks.js; node ./test.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
