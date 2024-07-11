@@ -1,28 +1,43 @@
-import { erase, cursor } from 'sisteransi';
-import color from 'picocolors';
-import isUnicodeSupported from 'is-unicode-supported';
+import { erase, cursor } from "sisteransi";
+import color from "picocolors";
+import isUnicodeSupported from "is-unicode-supported";
+import { Writable } from "stream";
 
 const unicode = isUnicodeSupported();
 const s = (c: string, fallback: string) => (unicode ? c : fallback);
-const S_STEP_ACTIVE = s('◆', '*');
-const S_STEP_CANCEL = s('■', 'x');
-const S_STEP_ERROR = s('▲', 'x');
-const S_STEP_SUBMIT = s('◇', 'o');
+const S_STEP_ACTIVE = s("◆", "*");
+const S_STEP_CANCEL = s("■", "x");
+const S_STEP_ERROR = s("▲", "x");
+const S_STEP_SUBMIT = s("◇", "o");
 
-const frames = unicode ? ['◒', '◐', '◓', '◑'] : ['•', 'o', 'O', '0'];
+const frames = unicode ? ["◒", "◐", "◓", "◑"] : ["•", "o", "O", "0"];
 
+/**
+ * Represents a task to be executed by the MultiSpinner.
+ */
 export interface Task {
+  /** The title of the task (or initial message set) */
   title: string;
+  /** The function to execute for this task.
+   * It takes one parameter: a function that is used to update the displayed message for this task.
+   */
   task: (message: (msg: string) => void) => Promise<string | void>;
+  /** Whether the task is enabled (default: true) */
   enabled?: boolean;
+  /** Custom status symbol to display instead of the spinner */
+  statusSymbol?: string;
 }
 
 interface Spinner {
   frame: number;
   message: string;
   status: "pending" | "success" | "error";
+  statusSymbol?: string;
 }
 
+/**
+ * Class for managing and displaying multiple concurrent tasks.
+ */
 export class MultiSpinner {
   private tasks: Task[];
   private spinners: Map<string, Spinner>;
@@ -31,8 +46,14 @@ export class MultiSpinner {
   private isRunning: boolean;
   private taskPromises: Promise<void>[];
   private resolveAllTasks: (() => void) | null;
+  private stream: Writable;
 
-  constructor(tasks: Task[]) {
+  /**
+   * Creates a new MultiSpinner instance.
+   * @param tasks - An array of tasks to be executed
+   * @param stream - The output stream to write to (default: process.stdout)
+   */
+  constructor(tasks: Task[], stream: Writable = process.stdout) {
     this.tasks = tasks;
     this.spinners = new Map();
     this.interval = null;
@@ -40,6 +61,7 @@ export class MultiSpinner {
     this.isRunning = false;
     this.taskPromises = [];
     this.resolveAllTasks = null;
+    this.stream = stream;
 
     this.initializeTasks(tasks);
   }
@@ -51,14 +73,19 @@ export class MultiSpinner {
           frame: 0,
           message: task.title,
           status: "pending",
+          statusSymbol: task.statusSymbol,
         });
       }
     });
   }
 
+  /**
+   * Starts the execution of tasks and renders the spinner.
+   * @returns A promise that resolves when all tasks are completed
+   */
   start(): Promise<void> {
     this.isRunning = true;
-    process.stdout.write("\n");
+    this.stream.write("\n");
     this.render();
     this.interval = setInterval(() => this.render(), 80);
 
@@ -70,15 +97,23 @@ export class MultiSpinner {
     });
   }
 
+  /**
+   * Stops the spinner and renders the final state.
+   */
   stop(): void {
     this.isRunning = false;
     if (this.interval) {
       clearInterval(this.interval);
     }
     this.render();
-    process.stdout.write("\n");
+    this.stream.write("\n");
   }
 
+  /**
+   * Updates the message for a specific task.
+   * @param index - The index of the task to update
+   * @param message - The new message to display
+   */
   update(index: number, message: string) {
     const spinner = this.spinners.get(String(index));
     if (spinner) {
@@ -86,6 +121,11 @@ export class MultiSpinner {
     }
   }
 
+  /**
+   * Marks a task as succeeded.
+   * @param index - The index of the task
+   * @param message - Optional message to display
+   */
   succeed(index: number, message?: string) {
     const spinner = this.spinners.get(String(index));
     if (spinner) {
@@ -94,6 +134,11 @@ export class MultiSpinner {
     }
   }
 
+  /**
+   * Marks a task as failed.
+   * @param index - The index of the task
+   * @param message - Optional error message to display
+   */
   fail(index: number, message?: string) {
     const spinner = this.spinners.get(String(index));
     if (spinner) {
@@ -102,6 +147,10 @@ export class MultiSpinner {
     }
   }
 
+  /**
+   * Adds a new task to the spinner.
+   * @param task - The task to add
+   */
   addTask(task: Task): void {
     if (this.hasPendingTasks()) {
       const newIndex = this.spinners.size;
@@ -109,6 +158,7 @@ export class MultiSpinner {
         frame: 0,
         message: task.title,
         status: "pending",
+        statusSymbol: task.statusSymbol,
       });
       this.tasks.push(task);
 
@@ -125,7 +175,7 @@ export class MultiSpinner {
     );
   }
 
-  async executeTask(task: Task, index: number): Promise<void> {
+  private async executeTask(task: Task, index: number): Promise<void> {
     const updateMessage = (message: string) => {
       this.update(index, message);
     };
@@ -147,30 +197,32 @@ export class MultiSpinner {
     if (!this.isRunning) {
       return;
     }
-  
+
     const output = Array.from(this.spinners.values())
       .map((spinner) => {
         const frame = frames[spinner.frame];
         spinner.frame = (spinner.frame + 1) % frames.length;
-        const statusSymbol =
-          spinner.status === "success" ? S_STEP_SUBMIT : spinner.status === "error" ? S_STEP_ERROR : frame;
+        const statusSymbol = spinner.statusSymbol
+          ? spinner.statusSymbol
+          : spinner.status === "success"
+          ? S_STEP_SUBMIT
+          : spinner.status === "error"
+          ? S_STEP_ERROR
+          : frame;
         return `${statusSymbol}  ${spinner.message}`;
       })
       .join("\n");
-  
+
     // Clear previous lines
     if (this.previousRenderedLines > 0) {
-      process.stdout.write(erase.lines(this.previousRenderedLines));
+      this.stream.write(erase.lines(this.previousRenderedLines));
     }
-    process.stdout.write(cursor.to(0, 0));
-    process.stdout.write(output);
-  
+    this.stream.write(cursor.to(0, 0));
+    this.stream.write(output);
+
     this.previousRenderedLines = output.split("\n").length;
   }
-  
 }
-
-
 
 ///// Tests /////
 function sleep(seconds: number): Promise<void> {
@@ -207,7 +259,8 @@ function test() {
   // Add a new task after 1 second
   setTimeout(() => {
     multiSpinner.addTask({
-      title: "Task 3 (Added)",
+      title: "Task 3 with custom symbol",
+      statusSymbol: "!",
       task: async (message) => {
         await sleep(1);
         message("Task 3 is running");
