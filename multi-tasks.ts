@@ -21,7 +21,10 @@ export interface Task {
   /** The function to execute for this task.
    * It takes one parameter: a function that is used to update the displayed message for this task.
    */
-  task: (updateFn: (msg: string) => void) => Promise<string | void>;
+  task: (
+    updateFn: (msg: string) => void,
+    signal: AbortSignal
+  ) => Promise<string | void>;
   /** Whether the task is disabled (default: false) */
   disabled?: boolean;
   /** Custom status symbol to display instead of the spinner */
@@ -36,7 +39,7 @@ export interface Task {
 interface Spinner {
   frame: number;
   message: string;
-  status: "pending" | "success" | "error";
+  status: "pending" | "success" | "error" | "cancelled";
   statusSymbol?: string;
 }
 
@@ -53,6 +56,7 @@ export class TaskManager {
   private taskPromises: Promise<void>[];
   private resolveAllTasks: (() => void) | null;
   private stream: Writable;
+  private abortController: AbortController;
 
   /**
    * Creates a new TaskManager instance.
@@ -68,6 +72,7 @@ export class TaskManager {
     this.taskPromises = [];
     this.resolveAllTasks = null;
     this.stream = stream;
+    this.abortController = new AbortController();
   }
 
   static getInstance() {
@@ -100,6 +105,11 @@ export class TaskManager {
       this.stop();
     });
 
+    // Set up Ctrl+C handler
+    process.on("SIGINT", () => {
+      this.stop();
+    });
+
     return allPromises;
   }
 
@@ -107,13 +117,28 @@ export class TaskManager {
    * Stops the spinner and renders the final state.
    */
   stop(): void {
-    this.isRunning = false;
-    // this.taskPromises.forEach((promise) => prom);
+    if (!this.isRunning) return;
+
+    this.cancelPendingTasks();
+    this.render();
+    this.isRunning = false; // Turns off rendering.
+    this.abortController.abort();
     if (this.interval) {
       clearInterval(this.interval);
     }
-    this.render();
     this.stream.write("\n");
+    if (this.resolveAllTasks) {
+      this.resolveAllTasks();
+    }
+  }
+
+  cancelPendingTasks(): void {
+    this.spinners.forEach((spinner, index) => {
+      if (spinner.status === "pending") {
+        spinner.status = "cancelled";
+        spinner.message += " (Cancelled)";
+      }
+    });
   }
 
   /**
@@ -160,7 +185,7 @@ export class TaskManager {
    */
   add(...tasks: Task[]): void {
     tasks.forEach((task) => {
-      if(task.disabled) return;
+      if (task.disabled) return;
 
       const newIndex =
         task.index !== undefined ? task.index : this.spinners.size;
@@ -191,14 +216,22 @@ export class TaskManager {
     };
 
     try {
-      const result = await task.task(updateMessage);
-      this.succeed(index, result || task.initialMessage);
+      const result = await task.task(
+        updateMessage,
+        this.abortController.signal
+      );
+      if (!this.abortController.signal.aborted) {
+        this.succeed(index, result || task.initialMessage);
+      }
     } catch (error) {
-      this.fail(index, `${task.initialMessage} (Error: ${(error as Error).message})`);
+      this.fail(
+        index,
+        `${task.initialMessage} (Error: ${(error as Error).message})`
+      );
     }
 
     if (!this.hasPendingTasks() && this.resolveAllTasks) {
-      this.render(); // Final call to render.
+      this.render(); // ? TODO: Is this call necessary?
       this.resolveAllTasks();
     }
   }
@@ -222,6 +255,8 @@ export class TaskManager {
           ? color.green(S_STEP_SUBMIT)
           : spinner.status === "error"
           ? color.red(S_STEP_ERROR)
+          : spinner.status === "cancelled"
+          ? color.yellow(S_STEP_CANCEL)
           : frame;
         return `|\n${statusSymbol}  ${spinner.message}`;
       })
@@ -240,23 +275,44 @@ export class TaskManager {
 
 class BaseTask implements Task {
   initialMessage: string;
-  console: any = () => {};
+  updateFn: any = () => {};
+  signal?: AbortSignal;
   close: (value: string) => void;
-  fail: (error: Error) => void;
+  fail: (error: string | Error) => void;
 
   constructor(title?: string) {
     this.initialMessage = title ?? "";
   }
 
-  task: (consoleFn: (msg: string) => void) => Promise<string | void> = async (
-    consoleFn
-  ) => {
-    this.console = consoleFn;
+  task: (
+    updateFn: (msg: string) => void,
+    signal: AbortSignal
+  ) => Promise<string | void> = async (updateFn, signal) => {
+    this.updateFn = updateFn;
+    this.signal = signal;
 
-    return new Promise((resolve, reject) => {
+    // Check if the task was aborted before starting.
+    if(signal?.aborted) return Promise.resolve("Aborted");
+
+    const abortHandler = () => {
+      this.close("Aborted"); // Resolve instead of reject to avoid unhandled promise rejection.
+      process.stderr.write("\nAborted " + this.initialMessage);
+    };
+    signal.addEventListener("abort", abortHandler, { once: true });
+
+    const p = new Promise<string | void>((resolve, reject) => {
+      if (signal.aborted) {
+        resolve(); // Resolve immediately if already aborted
+        return;
+      }
+
       this.close = resolve;
       this.fail = reject;
     });
+    p.finally(() => {
+      signal.removeEventListener("abort", abortHandler);
+    });
+    return p;
   };
 }
 
@@ -280,7 +336,7 @@ class StreamTask extends BaseTask {
 class Logger extends BaseTask {
   initialMessage: string = "Logger";
   log(msg: string) {
-    this.console(msg);
+    this.updateFn(msg);
   }
 }
 function logIt(msg: string) {
@@ -292,8 +348,18 @@ logIt("Task 2");
 logIt("Task 3");
 
 ///// Tests /////
-function sleep(seconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, seconds * 1000));
+function sleep(seconds: number, signal?: AbortSignal): Promise<void> {
+  if(signal?.aborted) return Promise.resolve();
+
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(resolve, seconds * 1000);
+    if (signal) {
+      signal.addEventListener("abort", () => {
+        clearTimeout(timeout);
+        resolve();
+      });
+    }
+  });
 }
 
 function test() {
