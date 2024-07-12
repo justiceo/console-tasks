@@ -18,6 +18,8 @@ export class TaskManager {
   taskPromises;
   resolveAllTasks;
   stream;
+  rows;
+  abortController;
   /**
    * Creates a new TaskManager instance.
    * @param tasks - An array of tasks to be executed
@@ -32,6 +34,11 @@ export class TaskManager {
     this.taskPromises = [];
     this.resolveAllTasks = null;
     this.stream = stream;
+    this.rows = stream.rows || 0;
+    this.abortController = new AbortController();
+    stream.on("resize", () => {
+      this.rows = stream.rows || 0;
+    });
   }
   static getInstance() {
     if (!TaskManager.instance) {
@@ -58,18 +65,35 @@ export class TaskManager {
     allPromises.finally(() => {
       this.stop();
     });
+    process.on("SIGINT", () => {
+      this.stop();
+    });
     return allPromises;
   }
   /**
    * Stops the spinner and renders the final state.
    */
   stop() {
+    if (!this.isRunning) return;
+    this.cancelPendingTasks();
+    this.render();
     this.isRunning = false;
+    this.abortController.abort();
     if (this.interval) {
       clearInterval(this.interval);
     }
-    this.render();
     this.stream.write("\n");
+    if (this.resolveAllTasks) {
+      this.resolveAllTasks();
+    }
+  }
+  cancelPendingTasks() {
+    this.spinners.forEach((spinner, index) => {
+      if (spinner.status === "pending") {
+        spinner.status = "cancelled";
+        spinner.message += " (Cancelled)";
+      }
+    });
   }
   /**
    * Updates the message for a specific task.
@@ -80,30 +104,6 @@ export class TaskManager {
     const spinner = this.spinners.get(index);
     if (spinner) {
       spinner.message = message;
-    }
-  }
-  /**
-   * Marks a task as succeeded.
-   * @param index - The index of the task
-   * @param message - Optional message to display
-   */
-  succeed(index, message) {
-    const spinner = this.spinners.get(index);
-    if (spinner) {
-      spinner.status = "success";
-      if (message) spinner.message = message;
-    }
-  }
-  /**
-   * Marks a task as failed.
-   * @param index - The index of the task
-   * @param message - Optional error message to display
-   */
-  fail(index, message) {
-    const spinner = this.spinners.get(index);
-    if (spinner) {
-      spinner.status = "error";
-      if (message) spinner.message = message;
     }
   }
   /**
@@ -135,11 +135,17 @@ export class TaskManager {
     const updateMessage = (message) => {
       this.update(index, message);
     };
+    const spinner = this.spinners.get(index);
+    if (!spinner) {
+      return;
+    }
     try {
-      const result = await task.task(updateMessage);
-      this.succeed(index, result || task.initialMessage);
+      await task.task(updateMessage, this.abortController.signal);
+      if (!this.abortController.signal.aborted) {
+        spinner.status = "success";
+      }
     } catch (error) {
-      this.fail(index, `${task.initialMessage} (Error: ${error.message})`);
+      spinner.status = "error";
     }
     if (!this.hasPendingTasks() && this.resolveAllTasks) {
       this.render();
@@ -156,7 +162,7 @@ export class TaskManager {
     const output = sortedSpinners.map(([_, spinner]) => {
       const frame = color.magenta(frames[spinner.frame]);
       spinner.frame = (spinner.frame + 1) % frames.length;
-      const statusSymbol = spinner.statusSymbol ? spinner.statusSymbol : spinner.status === "success" ? color.green(S_STEP_SUBMIT) : spinner.status === "error" ? color.red(S_STEP_ERROR) : frame;
+      const statusSymbol = spinner.statusSymbol ? spinner.statusSymbol : spinner.status === "success" ? color.green(S_STEP_SUBMIT) : spinner.status === "error" ? color.red(S_STEP_ERROR) : spinner.status === "cancelled" ? color.yellow(S_STEP_CANCEL) : frame;
       return `|
 ${statusSymbol}  ${spinner.message}`;
     }).join("\n");
@@ -164,25 +170,47 @@ ${statusSymbol}  ${spinner.message}`;
       this.stream.write(erase.lines(this.previousRenderedLines));
     }
     this.stream.write(cursor.to(0, 0));
-    this.stream.write(output);
-    this.previousRenderedLines = output.split("\n").length;
+    const currentOutputLines = output.split("\n").length;
+    if (currentOutputLines <= this.rows) {
+      this.stream.write(output);
+    } else {
+      this.stream.write(
+        output.split("\n").slice(currentOutputLines - this.rows).join("\n")
+      );
+    }
+    this.previousRenderedLines = currentOutputLines;
   }
 }
 class BaseTask {
   initialMessage;
-  console = () => {
+  updateFn = () => {
   };
+  signal;
   close;
   fail;
   constructor(title) {
     this.initialMessage = title ?? "";
   }
-  task = async (consoleFn) => {
-    this.console = consoleFn;
-    return new Promise((resolve, reject) => {
+  task = async (updateFn, signal) => {
+    this.updateFn = updateFn;
+    this.signal = signal;
+    if (signal?.aborted) return Promise.resolve("Aborted");
+    const abortHandler = () => {
+      this.close("Aborted");
+    };
+    signal.addEventListener("abort", abortHandler, { once: true });
+    const p = new Promise((resolve, reject) => {
+      if (signal.aborted) {
+        resolve();
+        return;
+      }
       this.close = resolve;
       this.fail = reject;
     });
+    p.finally(() => {
+      signal.removeEventListener("abort", abortHandler);
+    });
+    return p;
   };
 }
 export const addMessage = (msg) => {
@@ -193,18 +221,17 @@ export const addMessage = (msg) => {
   });
 };
 class StreamTask extends BaseTask {
+  text = "";
   initialMessage = "Stream Task";
   stream(text) {
-    this.console(text);
-    setTimeout(() => {
-      this.close(this.initialMessage + " completed");
-    }, 2e3);
+    this.text += text;
+    this.updateFn(this.text);
   }
 }
 class Logger extends BaseTask {
   initialMessage = "Logger";
   log(msg) {
-    this.console(msg);
+    this.updateFn(msg);
   }
 }
 function logIt(msg) {
@@ -213,8 +240,17 @@ function logIt(msg) {
 logIt("Task 1");
 logIt("Task 2");
 logIt("Task 3");
-function sleep(seconds) {
-  return new Promise((resolve) => setTimeout(resolve, seconds * 1e3));
+function sleep(seconds, signal) {
+  if (signal?.aborted) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(resolve, seconds * 1e3);
+    if (signal) {
+      signal.addEventListener("abort", () => {
+        clearTimeout(timeout);
+        resolve();
+      });
+    }
+  });
 }
 function test() {
   const s2 = new StreamTask("Stream Task 2");
@@ -222,11 +258,11 @@ function test() {
     {
       initialMessage: "Task 1",
       index: 1e3,
-      task: async (message) => {
-        await sleep(2);
+      task: async (message, signal) => {
+        await sleep(2, signal);
         message("Task 1 is halfway done");
-        await sleep(2);
-        return "Task 1 completed successfully";
+        await sleep(2, signal);
+        message("Task 1 completed successfully");
       }
     },
     {
@@ -237,11 +273,11 @@ function test() {
     {
       initialMessage: "Task Disabled",
       disabled: true,
-      task: async (message) => {
-        await sleep(1);
+      task: async (message, signal) => {
+        await sleep(1, signal);
         message("This task should not run");
-        await sleep(2);
-        return "Disabled Task finished";
+        await sleep(2, signal);
+        message("Disabled Task finished");
       }
     },
     s2
@@ -250,49 +286,55 @@ function test() {
   const taskManager = TaskManager.getInstance();
   taskManager.add(...initialTasks);
   const allTasksPromise = taskManager.run();
+  taskManager.add({
+    initialMessage: "Task 3 with custom symbol",
+    statusSymbol: "#",
+    task: async (message, signal) => {
+      await sleep(1, signal);
+      message("Task 3 is running");
+      const s3 = new StreamTask("Stream Task 3");
+      taskManager.add(s3);
+      s3.stream("Stream Task 3 is running");
+      await sleep(2, signal);
+      s3.close("Stream Task 3 completed");
+      message("Task 3 completed");
+    }
+  });
+  const interval = setInterval(() => {
+    s2.stream("\nLorem ipsum dolor sit amet, consectetur adipiscing elit.");
+  }, 500);
+  setTimeout(() => {
+    clearInterval(interval);
+    s2.close("Finished");
+  }, 3e3);
   setTimeout(() => {
     taskManager.add({
-      initialMessage: "Task 3 with custom symbol",
-      statusSymbol: "!",
-      task: async (message) => {
-        await sleep(1);
-        message("Task 3 is running");
-        const s3 = new StreamTask("Stream Task 3");
-        taskManager.add(s3);
-        s3.stream("Stream Task 3 is running");
-        await sleep(2);
-        return "Task 3 completed";
+      initialMessage: "Task 4 with failure",
+      task: async (message, signal) => {
+        await sleep(1, signal);
+        message("Task with failure is executing");
+        await sleep(1, signal);
+        throw new Error("Random error");
       }
     });
   }, 1e3);
   setTimeout(() => {
     taskManager.add({
-      initialMessage: "Task 4 with failure",
-      task: async (message) => {
-        await sleep(1);
-        message("Task with failure is executing");
-        await sleep(1);
-        throw new Error("Random error");
-      }
-    });
-  }, 2e3);
-  setTimeout(() => {
-    taskManager.add({
       initialMessage: "Task 5 added late",
-      task: async (message) => {
-        await sleep(1);
+      task: async (message, signal) => {
+        await sleep(1, signal);
         message("Task 5 is executing");
-        await sleep(1);
-        return "Task 5 done";
+        await sleep(1, signal);
+        message("Task 5 is done");
       }
     });
-  }, 3500);
+  }, 2500);
   setTimeout(() => {
     taskManager.add({
       initialMessage: "Task Too late (Should not be added)",
-      task: async (message) => {
-        await sleep(1);
-        return "This task should not run";
+      task: async (message, signal) => {
+        await sleep(1, signal);
+        message("This task should not run");
       }
     });
   }, 6e3);
