@@ -3,7 +3,7 @@ import { StreamTask } from "./widgets/stream";
 import { Logger } from "./widgets/logger";
 import { note } from "./widgets/note";
 import { code } from "./widgets/code";
-import { KeepAlive } from "./widgets/keep-alive";
+import { Stopwatch, TaskTimer, Timer } from "./widgets/timer";
 
 function sleep(seconds: number, signal?: AbortSignal): Promise<void> {
   if (signal?.aborted) return Promise.resolve();
@@ -20,7 +20,7 @@ function sleep(seconds: number, signal?: AbortSignal): Promise<void> {
 }
 
 
-const taskManager = TaskManager.getInstance(process.stdout, " Tasker ");
+const taskManager = TaskManager.getInstance({title: " Demo ", keepAlive: false});
 
 const logger = new Logger({ tag: "Demo", enableDebug: true });
 logger.debug("Debug message");
@@ -28,6 +28,8 @@ logger.log("Info message");
 logger.warn("Warning message");
 logger.error("Error message");
 
+
+taskManager.add(new TaskTimer(new Timer(6000)));
 
 function test() {
   const s2 = new StreamTask("Stream Task 2");
@@ -79,7 +81,7 @@ function test() {
   s2.stream("Stream Task 2 is running");
 
   taskManager.add(...initialTasks);
-  taskManager.add(new KeepAlive());
+  taskManager.add(new Stopwatch());
   taskManager.add(
     note("This is a note\nAnd an even longer note", "Note"));
   taskManager.add(code("console.log('Hello, World!');", "javascript"));
@@ -137,15 +139,15 @@ function test() {
   }, 2500);
 
   // Try to add a task after all tasks are completed (should have no effect)
-  setTimeout(() => {
-    taskManager.add({
-      initialMessage: "Task Too late (Should not be added)",
-      task: async (message, signal) => {
-        await sleep(1, signal);
-        message("This task should not run");
-      },
-    });
-  }, 6000);
+  // setTimeout(() => {
+  //   taskManager.add({
+  //     initialMessage: "Task Too late (Should not be added)",
+  //     task: async (message, signal) => {
+  //       await sleep(1, signal);
+  //       message("This task should not run");
+  //     },
+  //   });
+  // }, 6000);
 
   // Wait for all tasks to complete
   allTasksPromise

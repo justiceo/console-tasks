@@ -67,12 +67,37 @@ export interface Task {
 
 type SpinnerStatus = "pending" | "success" | "error" | "cancelled";
 
-interface Spinner {
+class Spinner {
   frame: number;
   message: string;
-  status: SpinnerStatus;
   statusSymbol?: string | Partial<StatusSymbol>;
   isHidden?: boolean;
+  private _status: SpinnerStatus;
+  private statusChangeHandlers: ((newStatus: SpinnerStatus) => void)[] = [];
+
+  constructor(
+    initialMessage: string,
+    initialStatus: SpinnerStatus = "pending"
+  ) {
+    this.frame = 0;
+    this.message = initialMessage;
+    this._status = initialStatus;
+  }
+
+  get status(): SpinnerStatus {
+    return this._status;
+  }
+
+  set status(newStatus: SpinnerStatus) {
+    if (this._status !== newStatus) {
+      this._status = newStatus;
+      this.statusChangeHandlers.forEach((handler) => handler(newStatus));
+    }
+  }
+
+  onStatusChange(handler: (newStatus: SpinnerStatus) => void): void {
+    this.statusChangeHandlers.push(handler);
+  }
 }
 
 interface TaskManagerOptions {
@@ -206,24 +231,40 @@ export class TaskManager {
    * Adds new tasks to the TaskManager.
    * @param tasks - The tasks to add
    */
-  add(...tasks: Task[]): void {
+  add(...tasks: Task[]): number[] {
+    const taskIds = [];
     tasks.forEach((task) => {
       if (task.disabled) return;
 
       const newIndex = task.index ?? this.spinners.size;
-      this.spinners.set(newIndex, {
-        frame: 0,
-        message: task.initialMessage,
-        status: "pending",
-        statusSymbol: task.statusSymbol,
-      });
+      const spinner = new Spinner(task.initialMessage);
+      spinner.statusSymbol = task.statusSymbol;
+      spinner.isHidden = task.isHidden;
+      this.spinners.set(newIndex, spinner);
       this.tasks.push(task);
+      taskIds.push(newIndex);
 
       // If the spinner is already running, start the new task immediately
       if (this.isRunning) {
         this.taskPromises.push(this.executeTask(task, newIndex));
       }
     });
+    return taskIds;
+  }
+
+  /**
+   * Registers a handler for status changes of a specific task.
+   * @param index The index of the task
+   * @param handler The handler to call when the status changes
+   */
+  onStatusChange(
+    index: number,
+    handler: (newStatus: SpinnerStatus) => void
+  ): void {
+    const spinner = this.spinners.get(index);
+    if (spinner) {
+      spinner.onStatusChange(handler);
+    }
   }
 
   /**
@@ -346,9 +387,13 @@ export class BaseTask implements Task {
     this.initialMessage = title;
   }
 
+  // Defers initialization to the derived class, after the task is started.
+  initialize() {}
+
   task: Task["task"] = async (updateFn, signal) => {
     this.updateFn = updateFn;
     this.signal = signal;
+    this.initialize();
     // Check if the task was aborted before starting.
     if (signal?.aborted) return;
 
