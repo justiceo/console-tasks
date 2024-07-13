@@ -15,9 +15,22 @@ const frames = unicode ? ["◒", "◐", "◓", "◑"] : ["•", "o", "O", "0"];
 const defaultStatusSymbols: StatusSymbol = {
   pending: frames.map((frame) => color.magenta(frame)),
   success: color.green(s("◇", "o")),
-  error: color.red(s("▲", "x")),
-  cancelled: color.yellow(s("■", "x")),
+  error: color.red(s("■", "x")),
+  cancelled: color.yellow(s("▲", "x")),
 };
+
+export const UI_SYMBOLS = {
+  INFO_STATUS: color.green(s("◇", "o")),
+  ERROR_STATUS: color.red(s("■", "x")),
+  WARN_STATUS: color.yellow(s("▲", "x")),
+  BAR_START: s('┌', 'T'),
+  BAR: s('│', '|'),
+  BAR_END: s('└', '—'),
+  BAR_H: s('─', '-'),
+  CORNER_TOP_RIGHT: s('┐', '+'),
+  CONNECT_LEFT: s('├', '+'),
+  CORNER_BOTTOM_RIGHT: s('┘', '+'),
+}
 
 /**
  * Represents a task to be executed by the TaskManager.
@@ -27,7 +40,9 @@ export interface Task {
   initialMessage: string;
 
   /** The function to execute for this task.
-   * It takes one parameter: a function that is used to update the displayed message for this task.
+   * @param updateFn Function to update the displayed message for this task.
+   * @param signal AbortSignal to handle task cancellation.
+   * @returns A Promise that resolves with a new Task or void.
    */
   task: (
     updateFn: (msg: string) => void,
@@ -37,8 +52,12 @@ export interface Task {
   /** Whether the task is disabled (default: false) */
   disabled?: boolean;
 
+  /** When true, the task is run but its UI is not rendered. */
+  // TODO: Implement this.
+  isHidden?: boolean;
+
   /** Custom status symbol to display instead of the spinner */
-  statusSymbol?: string | StatusSymbol;
+  statusSymbol?: string | Partial<StatusSymbol>;
 
   /** Optional index for positioning the task in the console output.
    * Indexes overwrite the existing task at that position if it exists.
@@ -47,44 +66,45 @@ export interface Task {
   index?: number;
 }
 
+type SpinnerStatus = "pending" | "success" | "error" | "cancelled";
+
 interface Spinner {
   frame: number;
   message: string;
-  status: "pending" | "success" | "error" | "cancelled";
-  statusSymbol?: string | StatusSymbol;
+  status: SpinnerStatus;
+  statusSymbol?: string | Partial<StatusSymbol>;
 }
 
 export class TaskManager {
-  private static instance: TaskManager;
-  private tasks: Task[];
-  private spinners: Map<number, Spinner>;
-  private interval: NodeJS.Timeout | null;
-  private previousRenderedLines: number;
-  private isRunning: boolean;
-  private taskPromises: Promise<void>[];
-  private resolveAllTasks: (() => void) | null;
-  private stream: Writable;
+  private static instance?: TaskManager = null;
+  private tasks: Task[] = [];
+  private spinners: Map<number, Spinner> = new Map();
+  private interval?: NodeJS.Timeout = null;
+  private previousRenderedLines = 0;
+  private isRunning = false;
+  private taskPromises: Promise<void>[] = [];
+  private resolveAllTasks: (() => void) | null = null;
+  private readonly stream: Writable;
   private rows: number;
   private abortController: AbortController;
-  private statusSymbols: StatusSymbol;
+  private title?: string;
+  private readonly statusSymbols: StatusSymbol;
+  private header = `${UI_SYMBOLS.BAR_START} ${color.bgCyan(color.bold(this.title))}\n`
 
   /**
    * Creates a new TaskManager instance.
    * @param stream - The output stream to write to (default: process.stdout)
    * @param customStatusSymbols - Custom status symbols to use (optional)
    */
-  constructor(
+  // TODO: Add keepAlive as an option, which insides a hidden KeepAlive task.
+  // TODO: Move this params to an options object.
+  private constructor(
     stream: Writable = process.stdout,
+    title?: string,
     customStatusSymbols?: Partial<StatusSymbol>
   ) {
-    this.tasks = [];
-    this.spinners = new Map();
-    this.interval = null;
-    this.previousRenderedLines = 0;
-    this.isRunning = false;
-    this.taskPromises = [];
-    this.resolveAllTasks = null;
     this.stream = stream;
+    this.title = title;
     this.rows = (stream as any).rows || 0;
     this.abortController = new AbortController();
     this.statusSymbols = { ...defaultStatusSymbols, ...customStatusSymbols };
@@ -94,12 +114,18 @@ export class TaskManager {
     });
   }
 
+  /**
+   * Gets the singleton instance of TaskManager.
+   * @param stream - The output stream to write to (default: process.stdout)
+   * @param customStatusSymbols - Custom status symbols to use (optional)
+   */
   static getInstance(
     stream?: Writable,
+    title?: string,
     customStatusSymbols?: Partial<StatusSymbol>
-  ) {
+  ): TaskManager {
     if (!TaskManager.instance) {
-      TaskManager.instance = new TaskManager(stream, customStatusSymbols);
+      TaskManager.instance = new TaskManager(stream, title, customStatusSymbols);
     }
     return TaskManager.instance;
   }
@@ -117,7 +143,7 @@ export class TaskManager {
     const allPromises = new Promise<void>((resolve) => {
       this.resolveAllTasks = resolve;
       this.tasks.forEach((task, defaultIndex) => {
-        const index = task.index !== undefined ? task.index : defaultIndex;
+        const index = task.index ?? defaultIndex;
         this.taskPromises.push(this.executeTask(task, index));
       });
     });
@@ -128,7 +154,7 @@ export class TaskManager {
     });
 
     // Set up Ctrl+C handler
-    process.on("SIGINT", () => {
+    process.once("SIGINT", () => {
       this.stop();
     });
 
@@ -143,18 +169,21 @@ export class TaskManager {
 
     this.cancelPendingTasks();
     this.render();
-    this.isRunning = false; // Turns off rendering.
+    this.isRunning = false;
     this.abortController.abort();
     if (this.interval) {
       clearInterval(this.interval);
+      this.interval = null;
     }
     this.stream.write("\n");
-    if (this.resolveAllTasks) {
-      this.resolveAllTasks();
-    }
+    this.resolveAllTasks?.();
+    this.resolveAllTasks = null;
   }
 
-  cancelPendingTasks(): void {
+  /**
+   * Cancels all pending tasks.
+   */
+  private cancelPendingTasks(): void {
     this.spinners.forEach((spinner) => {
       if (spinner.status === "pending") {
         spinner.status = "cancelled";
@@ -168,7 +197,7 @@ export class TaskManager {
    * @param index - The index of the task to update
    * @param message - The new message to display
    */
-  update(index: number, message: string) {
+  update(index: number, message: string): void {
     const spinner = this.spinners.get(index);
     if (spinner) {
       spinner.message = message;
@@ -176,15 +205,14 @@ export class TaskManager {
   }
 
   /**
-   * Adds a new task to the spinner.
-   * @param task - The task to add
+   * Adds new tasks to the TaskManager.
+   * @param tasks - The tasks to add
    */
   add(...tasks: Task[]): void {
     tasks.forEach((task) => {
       if (task.disabled) return;
 
-      const newIndex =
-        task.index !== undefined ? task.index : this.spinners.size;
+      const newIndex = task.index ?? this.spinners.size;
       this.spinners.set(newIndex, {
         frame: 0,
         message: task.initialMessage,
@@ -200,12 +228,21 @@ export class TaskManager {
     });
   }
 
+  /**
+   * Checks if there are any pending tasks.
+   * @returns True if there are pending tasks, false otherwise
+   */
   private hasPendingTasks(): boolean {
     return Array.from(this.spinners.values()).some(
       (spinner) => spinner.status === "pending"
     );
   }
 
+  /**
+   * Executes a single task.
+   * @param task - The task to execute
+   * @param index - The index of the task
+   */
   private async executeTask(task: Task, index: number): Promise<void> {
     const updateMessage = (message: string) => {
       this.update(index, message);
@@ -222,8 +259,9 @@ export class TaskManager {
       if (this.abortController.signal.aborted) {
         return;
       }
-      if (result instanceof Object && "task" in result) {
-        // If the task returned another task, add it to the task list
+
+      // Queue the next task if it's returned from the current task
+      if (result && typeof result === "object" && "task" in result) {
         this.add(result);
       }
       spinner.status = "success";
@@ -231,12 +269,14 @@ export class TaskManager {
       spinner.status = "error";
     }
 
-    if (!this.hasPendingTasks() && this.resolveAllTasks) {
-      this.render(); // ? TODO: Is this call necessary?
-      this.resolveAllTasks();
+    if (!this.hasPendingTasks()) {
+      this.resolveAllTasks?.();
     }
   }
 
+  /**
+   * Renders the current state of all tasks.
+   */
   private render(): void {
     if (!this.isRunning) return;
 
@@ -244,16 +284,11 @@ export class TaskManager {
       ([a], [b]) => a - b
     );
 
-    const output = sortedSpinners
+    const header = this.title ? this.header : "";
+    const output = header + sortedSpinners
       .map(([_, spinner]) => {
-        let statusSymbol: string;
-        if (typeof spinner.statusSymbol === "string") {
-          statusSymbol = spinner.statusSymbol;
-        } else {
-          statusSymbol = this.getStatusSymbol(spinner);
-        }
-
-        return `|\n${statusSymbol}  ${spinner.message}`;
+        const statusSymbol = this.getStatusSymbol(spinner);
+        return `${UI_SYMBOLS.BAR}\n${statusSymbol}  ${spinner.message}`;
       })
       .join("\n");
 
@@ -278,7 +313,15 @@ export class TaskManager {
     this.previousRenderedLines = currentOutputLines;
   }
 
+  /**
+   * Gets the appropriate status symbol for a spinner.
+   * @param spinner - The spinner to get the status symbol for
+   * @returns The status symbol as a string
+   */
   private getStatusSymbol(spinner: Spinner): string {
+    if (typeof spinner.statusSymbol === "string") {
+      return spinner.statusSymbol;
+    }
     if (spinner.status === "pending") {
       const pendingSymbol = this.statusSymbols.pending;
       if (Array.isArray(pendingSymbol)) {
@@ -299,48 +342,54 @@ export class BaseTask implements Task {
   close: (value: Task | void) => void = () => {};
   fail: (error: string | Error) => void = () => {};
 
-  constructor(title?: string) {
-    this.initialMessage = title ?? "";
+  constructor(title = "") {
+    this.initialMessage = title;
   }
 
-  task: (
-    updateFn: (msg: string) => void,
-    signal: AbortSignal
-  ) => Promise<Task | void> = async (updateFn, signal) => {
+  task: Task["task"] = async (updateFn, signal) => {
     this.updateFn = updateFn;
     this.signal = signal;
-
     // Check if the task was aborted before starting.
-    if (signal?.aborted) return Promise.resolve();
+    if (signal?.aborted) return;
 
     const abortHandler = () => {
       this.close();
     };
     signal.addEventListener("abort", abortHandler, { once: true });
 
-    const p = new Promise<Task | void>((resolve, reject) => {
-      if (signal.aborted) {
-        resolve();
-        return;
-      }
+    try {
+      return await new Promise<Task | void>((resolve, reject) => {
+        if (signal.aborted) {
+          resolve();
+          return;
+        }
 
-      this.close = resolve;
-      this.fail = reject;
-    });
-    p.finally(() => {
+        this.close = resolve;
+        this.fail = reject;
+      });
+    } finally {
       signal.removeEventListener("abort", abortHandler);
-    });
-    return p;
+    }
   };
 }
 
-export const addMessage = (msg: string) => {
+/**
+ * Adds a simple message task to the TaskManager.
+ * @param msg - The message to display
+ */
+export const addMessage = (msg: string, statusSymbol?: string): void => {
   TaskManager.getInstance().add({
+    statusSymbol: statusSymbol,
     initialMessage: msg,
     task: async () => {},
   });
 };
 
+/**
+ * Chains the given tasks for sequential execution.
+ * @param tasks - The tasks to execute in sequence
+ * @returns A new Task that represents the sequence of tasks
+ */
 export const sequence = (...tasks: Task[]): Task => {
   // Chain all the tasks in sequence.
   for (let i = 0; i < tasks.length; i++) {
@@ -369,8 +418,12 @@ export const sequence = (...tasks: Task[]): Task => {
   return tasks[0];
 };
 
-// From https://www.npmjs.com/package/is-unicode-supported
-function isUnicodeSupported() {
+/**
+ * Checks if Unicode is supported in the current environment.
+ * From https://www.npmjs.com/package/is-unicode-supported
+ * @returns True if Unicode is supported, false otherwise
+ */
+function isUnicodeSupported(): boolean {
   if (process.platform !== "win32") {
     return process.env.TERM !== "linux"; // Linux console (kernel)
   }
@@ -386,3 +439,15 @@ function isUnicodeSupported() {
     process.env.TERMINAL_EMULATOR === "JetBrains-JediTerm"
   );
 }
+
+// Adapted from https://github.com/chalk/ansi-regex
+// @see LICENSE
+function ansiRegex() {
+	const pattern = [
+		'[\\u001B\\u009B][[\\]()#;?]*(?:(?:(?:(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]+)*|[a-zA-Z\\d]+(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]*)*)?\\u0007)',
+		'(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PR-TZcf-nq-uy=><~]))',
+	].join('|');
+
+	return new RegExp(pattern, 'g');
+}
+export const strip = (str: string) => str.replace(ansiRegex(), '');

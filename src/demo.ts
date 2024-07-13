@@ -1,29 +1,10 @@
-import { TaskManager, addMessage, sequence, Task, BaseTask } from "./cli-tasks";
+import { TaskManager, sequence, Task } from "./tasks-api";
+import { StreamTask } from "./widgets/stream";
+import { Logger } from "./widgets/logger";
+import { note } from "./widgets/note";
+import { code } from "./widgets/code";
+import { KeepAlive } from "./widgets/keep-alive";
 
-class StreamTask extends BaseTask {
-  text = "";
-  initialMessage: string = "Stream Task";
-  stream(text: string) {
-    this.text += text;
-    this.updateFn(this.text);
-  }
-}
-
-class Logger extends BaseTask {
-  initialMessage: string = "Logger";
-  log(msg: string) {
-    this.updateFn(msg);
-  }
-}
-function logIt(msg: string) {
-  addMessage(msg);
-}
-
-logIt("Task 1");
-logIt("Task 2");
-logIt("Task 3");
-
-///// Tests /////
 function sleep(seconds: number, signal?: AbortSignal): Promise<void> {
   if (signal?.aborted) return Promise.resolve();
 
@@ -37,6 +18,16 @@ function sleep(seconds: number, signal?: AbortSignal): Promise<void> {
     }
   });
 }
+
+
+const taskManager = TaskManager.getInstance(process.stdout, " Tasker ");
+
+const logger = new Logger({ tag: "Demo", enableDebug: true });
+logger.debug("Debug message");
+logger.log("Info message");
+logger.warn("Warning message");
+logger.error("Error message");
+
 
 function test() {
   const s2 = new StreamTask("Stream Task 2");
@@ -87,8 +78,11 @@ function test() {
 
   s2.stream("Stream Task 2 is running");
 
-  const taskManager = TaskManager.getInstance();
   taskManager.add(...initialTasks);
+  taskManager.add(new KeepAlive());
+  taskManager.add(
+    note("This is a note\nAnd an even longer note", "Note"));
+  taskManager.add(code("console.log('Hello, World!');", "javascript"));
 
   // Start the spinner and get the promise
   const allTasksPromise = taskManager.run();
@@ -98,7 +92,7 @@ function test() {
     initialMessage: "Task 3 with custom symbol",
     statusSymbol: "#",
     task: async (message, signal) => {
-      await sleep(1, signal);
+      await sleep(3, signal);
       message("Task 3 is running");
       const s3 = new StreamTask("Stream Task 3");
       taskManager.add(s3);
