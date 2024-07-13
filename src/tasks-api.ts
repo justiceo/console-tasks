@@ -23,14 +23,14 @@ export const UI_SYMBOLS = {
   INFO_STATUS: color.green(s("◇", "o")),
   ERROR_STATUS: color.red(s("■", "x")),
   WARN_STATUS: color.yellow(s("▲", "x")),
-  BAR_START: s('┌', 'T'),
-  BAR: s('│', '|'),
-  BAR_END: s('└', '—'),
-  BAR_H: s('─', '-'),
-  CORNER_TOP_RIGHT: s('┐', '+'),
-  CONNECT_LEFT: s('├', '+'),
-  CORNER_BOTTOM_RIGHT: s('┘', '+'),
-}
+  BAR_START: s("┌", "T"),
+  BAR: s("│", "|"),
+  BAR_END: s("└", "—"),
+  BAR_H: s("─", "-"),
+  CORNER_TOP_RIGHT: s("┐", "+"),
+  CONNECT_LEFT: s("├", "+"),
+  CORNER_BOTTOM_RIGHT: s("┘", "+"),
+};
 
 /**
  * Represents a task to be executed by the TaskManager.
@@ -53,7 +53,6 @@ export interface Task {
   disabled?: boolean;
 
   /** When true, the task is run but its UI is not rendered. */
-  // TODO: Implement this.
   isHidden?: boolean;
 
   /** Custom status symbol to display instead of the spinner */
@@ -73,6 +72,14 @@ interface Spinner {
   message: string;
   status: SpinnerStatus;
   statusSymbol?: string | Partial<StatusSymbol>;
+  isHidden?: boolean;
+}
+
+interface TaskManagerOptions {
+  stream?: Writable;
+  title?: string;
+  customStatusSymbols?: Partial<StatusSymbol>;
+  keepAlive?: boolean;
 }
 
 export class TaskManager {
@@ -89,43 +96,34 @@ export class TaskManager {
   private abortController: AbortController;
   private title?: string;
   private readonly statusSymbols: StatusSymbol;
-  private header = `${UI_SYMBOLS.BAR_START} ${color.bgCyan(color.bold(this.title))}\n`
+  private header = `${UI_SYMBOLS.BAR_START} ${color.bgCyan(
+    color.bold(this.title)
+  )}\n`;
+  private keepAlive: boolean;
 
-  /**
-   * Creates a new TaskManager instance.
-   * @param stream - The output stream to write to (default: process.stdout)
-   * @param customStatusSymbols - Custom status symbols to use (optional)
-   */
-  // TODO: Add keepAlive as an option, which insides a hidden KeepAlive task.
-  // TODO: Move this params to an options object.
-  private constructor(
-    stream: Writable = process.stdout,
-    title?: string,
-    customStatusSymbols?: Partial<StatusSymbol>
-  ) {
-    this.stream = stream;
-    this.title = title;
-    this.rows = (stream as any).rows || 0;
+  private constructor(options: TaskManagerOptions) {
+    this.stream = options.stream || process.stdout;
+    this.title = options.title;
+    this.rows = (this.stream as any).rows || 0;
     this.abortController = new AbortController();
-    this.statusSymbols = { ...defaultStatusSymbols, ...customStatusSymbols };
+    this.statusSymbols = {
+      ...defaultStatusSymbols,
+      ...options.customStatusSymbols,
+    };
+    this.keepAlive = options.keepAlive || false;
 
-    stream.on("resize", () => {
-      this.rows = (stream as any).rows || 0;
+    this.stream.on("resize", () => {
+      this.rows = (this.stream as any).rows || 0;
     });
+
+    if (this.keepAlive) {
+      this.add(new KeepAlive());
+    }
   }
 
-  /**
-   * Gets the singleton instance of TaskManager.
-   * @param stream - The output stream to write to (default: process.stdout)
-   * @param customStatusSymbols - Custom status symbols to use (optional)
-   */
-  static getInstance(
-    stream?: Writable,
-    title?: string,
-    customStatusSymbols?: Partial<StatusSymbol>
-  ): TaskManager {
+  static getInstance(options: TaskManagerOptions = {}): TaskManager {
     if (!TaskManager.instance) {
-      TaskManager.instance = new TaskManager(stream, title, customStatusSymbols);
+      TaskManager.instance = new TaskManager(options);
     }
     return TaskManager.instance;
   }
@@ -280,17 +278,19 @@ export class TaskManager {
   private render(): void {
     if (!this.isRunning) return;
 
-    const sortedSpinners = Array.from(this.spinners.entries()).sort(
-      ([a], [b]) => a - b
-    );
+    const sortedSpinners = Array.from(this.spinners.entries())
+      .filter(([index, spinner]) => !spinner.isHidden)
+      .sort(([a], [b]) => a - b);
 
     const header = this.title ? this.header : "";
-    const output = header + sortedSpinners
-      .map(([_, spinner]) => {
-        const statusSymbol = this.getStatusSymbol(spinner);
-        return `${UI_SYMBOLS.BAR}\n${statusSymbol}  ${spinner.message}`;
-      })
-      .join("\n");
+    const output =
+      header +
+      sortedSpinners
+        .map(([_, spinner]) => {
+          const statusSymbol = this.getStatusSymbol(spinner);
+          return `${UI_SYMBOLS.BAR}\n${statusSymbol}  ${spinner.message}`;
+        })
+        .join("\n");
 
     // Clear previous lines
     if (this.previousRenderedLines > 0) {
@@ -373,6 +373,10 @@ export class BaseTask implements Task {
   };
 }
 
+export class KeepAlive extends BaseTask {
+  isHidden = true;
+}
+
 /**
  * Adds a simple message task to the TaskManager.
  * @param msg - The message to display
@@ -443,11 +447,11 @@ function isUnicodeSupported(): boolean {
 // Adapted from https://github.com/chalk/ansi-regex
 // @see LICENSE
 function ansiRegex() {
-	const pattern = [
-		'[\\u001B\\u009B][[\\]()#;?]*(?:(?:(?:(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]+)*|[a-zA-Z\\d]+(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]*)*)?\\u0007)',
-		'(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PR-TZcf-nq-uy=><~]))',
-	].join('|');
+  const pattern = [
+    "[\\u001B\\u009B][[\\]()#;?]*(?:(?:(?:(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]+)*|[a-zA-Z\\d]+(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]*)*)?\\u0007)",
+    "(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PR-TZcf-nq-uy=><~]))",
+  ].join("|");
 
-	return new RegExp(pattern, 'g');
+  return new RegExp(pattern, "g");
 }
-export const strip = (str: string) => str.replace(ansiRegex(), '');
+export const strip = (str: string) => str.replace(ansiRegex(), "");
