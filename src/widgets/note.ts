@@ -1,4 +1,4 @@
-import { Task, strip,UI_SYMBOLS } from "../tasks-api";
+import { Task, strip,UI_SYMBOLS } from "..";
 import color from "picocolors";
 
 export const note: (message, title) => Task = (message, title) => {

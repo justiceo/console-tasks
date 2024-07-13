@@ -1,4 +1,4 @@
-import { TaskManager, sequence, Task } from "./tasks-api";
+import { TaskManager, sequence, Task } from ".";
 import { StreamTask } from "./widgets/stream";
 import { Logger } from "./widgets/logger";
 import { note } from "./widgets/note";
