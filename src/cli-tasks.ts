@@ -3,14 +3,22 @@ import color from "picocolors";
 import isUnicodeSupported from "is-unicode-supported";
 import { Writable } from "stream";
 
+export interface StatusSymbol {
+  pending: string | string[];
+  success: string;
+  error: string;
+  cancelled: string;
+}
+
 const unicode = isUnicodeSupported();
 const s = (c: string, fallback: string) => (unicode ? c : fallback);
-const S_STEP_ACTIVE = s("◆", "*");
-const S_STEP_CANCEL = s("■", "x");
-const S_STEP_ERROR = s("▲", "x");
-const S_STEP_SUBMIT = s("◇", "o");
-
 const frames = unicode ? ["◒", "◐", "◓", "◑"] : ["•", "o", "O", "0"];
+const defaultStatusSymbols: StatusSymbol = {
+  pending: frames.map((frame) => color.magenta(frame)),
+  success: color.green(s("◇", "o")),
+  error: color.red(s("▲", "x")),
+  cancelled: color.yellow(s("■", "x")),
+};
 
 /**
  * Represents a task to be executed by the TaskManager.
@@ -28,7 +36,7 @@ export interface Task {
   /** Whether the task is disabled (default: false) */
   disabled?: boolean;
   /** Custom status symbol to display instead of the spinner */
-  statusSymbol?: string;
+  statusSymbol?: string | StatusSymbol;
   /** Optional index for positioning the task in the console output.
    * Indexes overwrite the existing task at that position if it exists.
    * Use carefully to avoid overlapping tasks.
@@ -40,12 +48,9 @@ interface Spinner {
   frame: number;
   message: string;
   status: "pending" | "success" | "error" | "cancelled";
-  statusSymbol?: string;
+  statusSymbol?: string | StatusSymbol;
 }
 
-/**
- * Class for managing and displaying multiple concurrent tasks.
- */
 export class TaskManager {
   private static instance: TaskManager;
   private tasks: Task[];
@@ -58,13 +63,17 @@ export class TaskManager {
   private stream: Writable;
   private rows: number;
   private abortController: AbortController;
+  private statusSymbols: StatusSymbol;
 
   /**
    * Creates a new TaskManager instance.
-   * @param tasks - An array of tasks to be executed
    * @param stream - The output stream to write to (default: process.stdout)
+   * @param customStatusSymbols - Custom status symbols to use (optional)
    */
-  private constructor(stream: Writable = process.stdout) {
+  constructor(
+    stream: Writable = process.stdout,
+    customStatusSymbols?: Partial<StatusSymbol>
+  ) {
     this.tasks = [];
     this.spinners = new Map();
     this.interval = null;
@@ -75,15 +84,19 @@ export class TaskManager {
     this.stream = stream;
     this.rows = stream.rows || 0;
     this.abortController = new AbortController();
+    this.statusSymbols = { ...defaultStatusSymbols, ...customStatusSymbols };
 
     stream.on("resize", () => {
       this.rows = stream.rows! || 0;
     });
   }
 
-  static getInstance() {
+  static getInstance(
+    stream?: Writable,
+    customStatusSymbols?: Partial<StatusSymbol>
+  ) {
     if (!TaskManager.instance) {
-      TaskManager.instance = new TaskManager();
+      TaskManager.instance = new TaskManager(stream, customStatusSymbols);
     }
     return TaskManager.instance;
   }
@@ -227,17 +240,13 @@ export class TaskManager {
 
     const output = sortedSpinners
       .map(([_, spinner]) => {
-        const frame = color.magenta(frames[spinner.frame]);
-        spinner.frame = (spinner.frame + 1) % frames.length;
-        const statusSymbol = spinner.statusSymbol
-          ? spinner.statusSymbol
-          : spinner.status === "success"
-          ? color.green(S_STEP_SUBMIT)
-          : spinner.status === "error"
-          ? color.red(S_STEP_ERROR)
-          : spinner.status === "cancelled"
-          ? color.yellow(S_STEP_CANCEL)
-          : frame;
+        let statusSymbol: string;
+        if (typeof spinner.statusSymbol === "string") {
+          statusSymbol = spinner.statusSymbol;
+        } else {
+          statusSymbol = this.getStatusSymbol(spinner);
+        }
+
         return `|\n${statusSymbol}  ${spinner.message}`;
       })
       .join("\n");
@@ -261,6 +270,19 @@ export class TaskManager {
       );
     }
     this.previousRenderedLines = currentOutputLines;
+  }
+
+  private getStatusSymbol(spinner: Spinner): string {
+    if (spinner.status === "pending") {
+      const pendingSymbol = this.statusSymbols.pending;
+      if (Array.isArray(pendingSymbol)) {
+        spinner.frame = (spinner.frame + 1) % pendingSymbol.length;
+        return pendingSymbol[spinner.frame];
+      }
+      return pendingSymbol;
+    } else {
+      return this.statusSymbols[spinner.status];
+    }
   }
 }
 
