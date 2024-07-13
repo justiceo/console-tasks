@@ -1,0 +1,16 @@
+{
+    "compilerOptions": {
+      "target": "ESNext", // or a specific ECMAScript version like "ES2020"
+      "module": "ESNext", // Use "ES6" or "ESNext" for ES modules
+      "outDir": "./dist",
+      "rootDir": "./src",
+      "strict": false,
+      "esModuleInterop": true,
+      "moduleResolution": "node",
+      "experimentalDecorators": true,
+      "emitDecoratorMetadata": true,
+      "forceConsistentCasingInFileNames": true
+    },
+    "include": ["src/**/*.ts"],
+    "exclude": ["node_modules", "dist"]
+  }

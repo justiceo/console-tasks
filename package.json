@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "build": "node esbuild.js",
-    "test": "node dist/multi-tasks.js"
+    "test": "jest"
   },
   "keywords": [],
   "author": "",
@@ -12,11 +12,12 @@
   "type": "module",
   "description": "",
   "dependencies": {
-    "is-unicode-supported": "^2.0.0",
     "picocolors": "^1.0.1",
     "sisteransi": "^1.0.5"
   },
   "devDependencies": {
-    "esbuild": "^0.23.0"
+    "@types/jest": "^29.5.12",
+    "esbuild": "^0.23.0",
+    "ts-jest": "^29.2.2"
   }
 }

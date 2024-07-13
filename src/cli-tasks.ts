@@ -1,6 +1,5 @@
 import { erase, cursor } from "sisteransi";
 import color from "picocolors";
-import isUnicodeSupported from "is-unicode-supported";
 import { Writable } from "stream";
 
 export interface StatusSymbol {
@@ -26,6 +25,7 @@ const defaultStatusSymbols: StatusSymbol = {
 export interface Task {
   /** The initial message to be displayed. */
   initialMessage: string;
+
   /** The function to execute for this task.
    * It takes one parameter: a function that is used to update the displayed message for this task.
    */
@@ -33,10 +33,13 @@ export interface Task {
     updateFn: (msg: string) => void,
     signal: AbortSignal
   ) => Promise<string | void>;
+
   /** Whether the task is disabled (default: false) */
   disabled?: boolean;
+
   /** Custom status symbol to display instead of the spinner */
   statusSymbol?: string | StatusSymbol;
+
   /** Optional index for positioning the task in the console output.
    * Indexes overwrite the existing task at that position if it exists.
    * Use carefully to avoid overlapping tasks.
@@ -82,12 +85,12 @@ export class TaskManager {
     this.taskPromises = [];
     this.resolveAllTasks = null;
     this.stream = stream;
-    this.rows = stream.rows || 0;
+    this.rows = (stream as any).rows || 0;
     this.abortController = new AbortController();
     this.statusSymbols = { ...defaultStatusSymbols, ...customStatusSymbols };
 
     stream.on("resize", () => {
-      this.rows = stream.rows! || 0;
+      this.rows = (stream as any).rows || 0;
     });
   }
 
@@ -334,3 +337,21 @@ export const addMessage = (msg: string) => {
     task: async () => {},
   });
 };
+
+// From https://www.npmjs.com/package/is-unicode-supported
+function isUnicodeSupported() {
+  if (process.platform !== "win32") {
+    return process.env.TERM !== "linux"; // Linux console (kernel)
+  }
+
+  return (
+    Boolean(process.env.WT_SESSION) || // Windows Terminal
+    Boolean(process.env.TERMINUS_SUBLIME) || // Terminus (<0.2.27)
+    process.env.ConEmuTask === "{cmd::Cmder}" || // ConEmu and cmder
+    process.env.TERM_PROGRAM === "Terminus-Sublime" ||
+    process.env.TERM_PROGRAM === "vscode" ||
+    process.env.TERM === "xterm-256color" ||
+    process.env.TERM === "alacritty" ||
+    process.env.TERMINAL_EMULATOR === "JetBrains-JediTerm"
+  );
+}
