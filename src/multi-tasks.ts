@@ -1,4 +1,4 @@
-import { TaskManager, addMessage, Task, BaseTask } from "./cli-tasks";
+import { TaskManager, addMessage, sequence, Task, BaseTask } from "./cli-tasks";
 
 class StreamTask extends BaseTask {
   text = "";
@@ -40,6 +40,22 @@ function sleep(seconds: number, signal?: AbortSignal): Promise<void> {
 
 function test() {
   const s2 = new StreamTask("Stream Task 2");
+  const parentTask: Task = {
+    initialMessage: "Parent Task",
+    task: async (updateFn, signal) => {
+      updateFn("Parent task is running");
+      await sleep(2);
+      updateFn("Parent task is done");
+      return {
+        initialMessage: "Child Task",
+        task: async (childUpdateFn, childSignal) => {
+          childUpdateFn("Child task is running");
+          await sleep(2);
+          childUpdateFn("Child task is done");
+        },
+      };
+    },
+  };
   const initialTasks: Task[] = [
     {
       initialMessage: "Task 1",
@@ -66,7 +82,7 @@ function test() {
         message("Disabled Task finished");
       },
     },
-    s2,
+    sequence(s2, parentTask),
   ];
 
   s2.stream("Stream Task 2 is running");
@@ -88,7 +104,7 @@ function test() {
       taskManager.add(s3);
       s3.stream("Stream Task 3 is running");
       await sleep(2, signal);
-      s3.close("Stream Task 3 completed");
+      s3.close();
       message("Task 3 completed");
     },
   });
@@ -98,7 +114,7 @@ function test() {
   }, 500);
   setTimeout(() => {
     clearInterval(interval);
-    s2.close("Finished");
+    s2.close();
   }, 3000);
 
   // Add another task after 2 seconds with a specific index

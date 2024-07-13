@@ -32,7 +32,7 @@ export interface Task {
   task: (
     updateFn: (msg: string) => void,
     signal: AbortSignal
-  ) => Promise<string | void>;
+  ) => Promise<Task | void>;
 
   /** Whether the task is disabled (default: false) */
   disabled?: boolean;
@@ -155,7 +155,7 @@ export class TaskManager {
   }
 
   cancelPendingTasks(): void {
-    this.spinners.forEach((spinner, index) => {
+    this.spinners.forEach((spinner) => {
       if (spinner.status === "pending") {
         spinner.status = "cancelled";
         spinner.message += " (Cancelled)";
@@ -212,16 +212,21 @@ export class TaskManager {
     };
 
     const spinner = this.spinners.get(index);
-    if (!spinner) {
-      // This should never happen.
-      return;
-    }
+    if (!spinner) return;
 
     try {
-      await task.task(updateMessage, this.abortController.signal);
-      if (!this.abortController.signal.aborted) {
-        spinner.status = "success";
+      const result = await task.task(
+        updateMessage,
+        this.abortController.signal
+      );
+      if (this.abortController.signal.aborted) {
+        return;
       }
+      if (result instanceof Object && "task" in result) {
+        // If the task returned another task, add it to the task list
+        this.add(result);
+      }
+      spinner.status = "success";
     } catch (error) {
       spinner.status = "error";
     }
@@ -233,9 +238,7 @@ export class TaskManager {
   }
 
   private render(): void {
-    if (!this.isRunning) {
-      return;
-    }
+    if (!this.isRunning) return;
 
     const sortedSpinners = Array.from(this.spinners.entries()).sort(
       ([a], [b]) => a - b
@@ -291,10 +294,10 @@ export class TaskManager {
 
 export class BaseTask implements Task {
   initialMessage: string;
-  updateFn: any = () => {};
+  updateFn: (msg: string) => void = () => {};
   signal?: AbortSignal;
-  close: (reason?: string) => void;
-  fail: (error: string | Error) => void;
+  close: (value: Task | void) => void = () => {};
+  fail: (error: string | Error) => void = () => {};
 
   constructor(title?: string) {
     this.initialMessage = title ?? "";
@@ -303,21 +306,21 @@ export class BaseTask implements Task {
   task: (
     updateFn: (msg: string) => void,
     signal: AbortSignal
-  ) => Promise<string | void> = async (updateFn, signal) => {
+  ) => Promise<Task | void> = async (updateFn, signal) => {
     this.updateFn = updateFn;
     this.signal = signal;
 
     // Check if the task was aborted before starting.
-    if (signal?.aborted) return Promise.resolve("Aborted");
+    if (signal?.aborted) return Promise.resolve();
 
     const abortHandler = () => {
-      this.close("Aborted"); // Resolve instead of reject to avoid unhandled promise rejection.
+      this.close();
     };
     signal.addEventListener("abort", abortHandler, { once: true });
 
-    const p = new Promise<string | void>((resolve, reject) => {
+    const p = new Promise<Task | void>((resolve, reject) => {
       if (signal.aborted) {
-        resolve(); // Resolve immediately if already aborted
+        resolve();
         return;
       }
 
@@ -336,6 +339,34 @@ export const addMessage = (msg: string) => {
     initialMessage: msg,
     task: async () => {},
   });
+};
+
+export const sequence = (...tasks: Task[]): Task => {
+  // Chain all the tasks in sequence.
+  for (let i = 0; i < tasks.length; i++) {
+    const task = tasks[i];
+    const origTaskFn = task.task;
+    task.task = (updateFn, signal) => {
+      return new Promise(async (resolve) => {
+        const result = await origTaskFn(updateFn, signal);
+
+        // if the result is a task, insert it into the sequence.
+        if (result instanceof Object && "task" in result) {
+          tasks.splice(i + 1, 0, result);
+        }
+
+        // Resolve the current task with the next task in the sequence.
+        if (i === tasks.length - 1) {
+          resolve();
+        } else {
+          resolve(tasks[i + 1]);
+        }
+      });
+    };
+  }
+
+  // Return the first task in the sequence.
+  return tasks[0];
 };
 
 // From https://www.npmjs.com/package/is-unicode-supported
