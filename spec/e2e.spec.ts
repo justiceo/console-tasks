@@ -1,4 +1,4 @@
-import { TaskManager, addMessage, Task, BaseTask } from "../src/cli-tasks";
+import { TaskManager, addMessage, Task, BaseTask } from "../src";
 import { jest } from "@jest/globals";
 import { Writable } from "stream";
 
@@ -61,7 +61,7 @@ describe("Task", () => {
     mockUpdateFn = jest.fn();
     mockSignal = new AbortController().signal;
     stream = new FakeWritableStream();
-    taskManager = new TaskManager(stream);
+    taskManager = TaskManager.getInstance({stream: stream});
   });
 
   it("should display the initial message correctly", async () => {

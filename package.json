@@ -4,7 +4,8 @@
   "main": "index.js",
   "scripts": {
     "build": "node esbuild.js",
-    "test": "jest"
+    "test": "jest",
+    "record-demo": "vhs src/demo.tape"
   },
   "keywords": [],
   "author": "",
