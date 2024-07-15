@@ -1,17 +1,26 @@
 {
-  "name": "ai-console",
-  "version": "1.0.0",
-  "main": "index.js",
+  "name": "console-tasks",
+  "version": "0.0.1",
+  "main": "dist/index.js",
   "scripts": {
     "build": "node esbuild.js",
     "test": "jest",
+    "demo": "node esbuild.js; node dist/demo.js",
     "record-demo": "vhs src/demo.tape"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "terminal",
+    "console",
+    "concurrent",
+    "spinners",
+    "tasks",
+    "cli",
+    "command-line"
+  ],
+  "author": "Justice Ogbonna",
+  "license": "MIT",
   "type": "module",
-  "description": "",
+  "description": "ConsoleTasks is a NodeJs library for managing concurrent tasks in the console. It provides a clean and intuitive API for creating, executing, and monitoring tasks with a highly configurable and visually appealing progress display.",
   "dependencies": {
     "picocolors": "^1.0.1",
     "sisteransi": "^1.0.5"

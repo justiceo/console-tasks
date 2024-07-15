@@ -99,12 +99,14 @@ class Spinner {
     this.statusChangeHandlers.push(handler);
   }
 }
-
 interface TaskManagerOptions {
   stream?: Writable;
   title?: string;
   customStatusSymbols?: Partial<StatusSymbol>;
   keepAlive?: boolean;
+  taskPrefix?: (taskSeparator: string, statusSymbol: string) => string;
+  stopAndRecreate?: boolean;
+  headerFormatter?: (title: string) => string;
 }
 
 export class TaskManager {
@@ -121,10 +123,10 @@ export class TaskManager {
   private abortController: AbortController;
   private title?: string;
   private readonly statusSymbols: StatusSymbol;
-  private header = `${UI_SYMBOLS.BAR_START} ${color.bgCyan(
-    color.bold(this.title)
-  )}\n`;
   private keepAlive: boolean;
+  private taskPrefix: (taskSeparator: string, statusSymbol: string) => string;
+  private headerFormatter: (title: string) => string;
+  private isCursorHidden: boolean = false;
 
   private constructor(options: TaskManagerOptions) {
     this.stream = options.stream || process.stdout;
@@ -136,6 +138,13 @@ export class TaskManager {
       ...options.customStatusSymbols,
     };
     this.keepAlive = options.keepAlive || false;
+    this.taskPrefix =
+      options.taskPrefix ??
+      ((separator, symbol) => `${separator}\n${symbol}  `);
+    this.headerFormatter =
+      options.headerFormatter ??
+      ((title) =>
+        `${UI_SYMBOLS.BAR_START} ${color.inverse(title)}\n`);
 
     this.stream.on("resize", () => {
       this.rows = (this.stream as any).rows || 0;
@@ -150,6 +159,10 @@ export class TaskManager {
     if (!TaskManager.instance) {
       TaskManager.instance = new TaskManager(options);
     }
+    if (options.stopAndRecreate) {
+      TaskManager.instance.stop();
+      TaskManager.instance = new TaskManager(options);
+    }
     return TaskManager.instance;
   }
 
@@ -159,6 +172,7 @@ export class TaskManager {
    */
   run(): Promise<void> {
     this.isRunning = true;
+    this.hideCursor();
     this.stream.write("\n");
     this.render();
     this.interval = setInterval(() => this.render(), 80);
@@ -199,8 +213,29 @@ export class TaskManager {
       this.interval = null;
     }
     this.stream.write("\n");
+    this.showCursor();
     this.resolveAllTasks?.();
     this.resolveAllTasks = null;
+  }
+
+  /**
+   * Hides the cursor.
+   */
+  private hideCursor(): void {
+    if (!this.isCursorHidden) {
+      this.stream.write(cursor.hide);
+      this.isCursorHidden = true;
+    }
+  }
+
+  /**
+   * Shows the cursor.
+   */
+  private showCursor(): void {
+    if (this.isCursorHidden) {
+      this.stream.write(cursor.show);
+      this.isCursorHidden = false;
+    }
   }
 
   /**
@@ -319,17 +354,23 @@ export class TaskManager {
   private render(): void {
     if (!this.isRunning) return;
 
+    // Ensure cursor is hidden before rendering
+    this.hideCursor();
+
+    // Preserve renderng task and filter out hidden tasks.
     const sortedSpinners = Array.from(this.spinners.entries())
       .filter(([index, spinner]) => !spinner.isHidden)
       .sort(([a], [b]) => a - b);
 
-    const header = this.title ? this.header : "";
+    const header = this.title ? this.headerFormatter(this.title) : "";
     const output =
       header +
       sortedSpinners
         .map(([_, spinner]) => {
           const statusSymbol = this.getStatusSymbol(spinner);
-          return `${UI_SYMBOLS.BAR}\n${statusSymbol}  ${spinner.message}`;
+          return `${this.taskPrefix(UI_SYMBOLS.BAR, statusSymbol)}${
+            spinner.message
+          }`;
         })
         .join("\n");
 

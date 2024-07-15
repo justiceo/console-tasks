@@ -37,7 +37,7 @@ const shimBanner = {
  * ESNext + ESM, bundle: true, and require() shim in banner.
  */
 const buildOptions = {
-  entryPoints: ["./src/demo.ts"],
+  entryPoints: ["./src/index.ts", "./src/demo.ts", "./src/basic-demo.ts"],
   outdir: "./dist",
   format: "esm",
   target: "esnext",
