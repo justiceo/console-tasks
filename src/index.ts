@@ -2,6 +2,9 @@ import { erase, cursor } from "sisteransi";
 import color from "picocolors";
 import { Writable } from "stream";
 
+// Export color for use in dependent modules.
+export { color };
+
 export interface StatusSymbol {
   pending: string | string[];
   success: string;

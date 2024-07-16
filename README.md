@@ -47,7 +47,10 @@ await taskManager.run();
 ```
 Which results in this
 
-![Basic Demo](basic-demo.gif)
+![Basic Demo](https://raw.githubusercontent.com/justiceo/console-tasks/main/src/examples/basic-demo.gif)
+
+### Demo showcasing more of the features
+![Basic Demo](https://raw.githubusercontent.com/justiceo/console-tasks/main/src/examples/demo.gif)
 
 
 ## API Reference
@@ -109,14 +112,6 @@ The `Task` interface represents a task to be executed by the TaskManager.
 
 - `sequence(...tasks: Task[]): Task`
   - Chains the given tasks for sequential execution.
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## License
-
-This project is licensed under the MIT License.
 
 ## Contributing
 

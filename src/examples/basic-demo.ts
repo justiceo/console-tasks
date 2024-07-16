@@ -1,4 +1,4 @@
-import { Task, TaskManager } from "./index";
+import { Task, TaskManager } from "../index";
 
 // Define a task
 const exampleTask: Task = {

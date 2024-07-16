@@ -7,8 +7,8 @@ export class StreamTask extends BaseTask {
   statusSymbol = UI_SYMBOLS.BAR;
   stream(text: string) {
     this.rawText += text;
-    const [firstLine, ...rest] = this.smartLineBreak(color.gray(this.rawText)).split("\n");    
-    const formattedText = firstLine + (rest.length > 0 ? "\n" + rest.map((line) => `${UI_SYMBOLS.BAR} ${line}`).join("\n") : "");
+    const [firstLine, ...rest] = this.smartLineBreak(color.blue(this.rawText)).split("\n");    
+    const formattedText = firstLine + (rest.length > 0 ? "\n" + rest.map((line) => `${UI_SYMBOLS.BAR}  ${line}`).join("\n") : "");
     this.updateFn(formattedText);
   }
 

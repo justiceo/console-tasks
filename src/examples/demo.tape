@@ -2,7 +2,7 @@
 # Full spec here - https://github.com/charmbracelet/vhs/blob/main/examples/demo.tape
 
 Set Shell zsh
-Output demo.gif
+Output src/examples/demo.gif
 
 # Settings:
 #   Set FontSize <number>           Set the font size of the terminal
@@ -22,17 +22,21 @@ Output demo.gif
 #   Set WindowBar <string>          Set window bar type. (one of: Rings, RingsRight, Colorful, ColorfulRight)
 #   Set WindowBarSize <number>      Set window bar size, in pixels. Default is 40.
 #   Set TypingSpeed <time>          Set the typing speed of the terminal. Default is 50ms.
-Set FontSize 14
-Set Height 800
-Set Width 600
+Set FontSize 11
+Set Height 600
+Set Width 1000
 Set Padding 10
-Set BorderRadius 10
+Set BorderRadius 0
 Set WindowBar Colorful
+# Set Theme "Builtin Solarized Light"
+# Set Theme iceberg-light
+# Set Theme "iTerm2 Light Background"
+Set Theme "iTerm2 Solarized Light"
 
 Sleep 3s
-Type "node dist/demo.js"
+Type "node src/examples/demo.js"
 Enter
-Sleep 5s
+Sleep 52s
 Ctrl+C
-Sleep 1.5s
+
 
