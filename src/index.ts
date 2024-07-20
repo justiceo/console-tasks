@@ -1,6 +1,6 @@
 import { erase, cursor } from "sisteransi";
 import color from "picocolors";
-import { Writable } from "stream";
+import { Writable } from "node:stream";
 
 // Export color for use in dependent modules.
 export { color };
@@ -50,7 +50,7 @@ export interface Task {
   task: (
     updateFn: (msg: string) => void,
     signal: AbortSignal
-  ) => Promise<Task | void>;
+  ) => Promise<Task | void | any>;
 
   /** Whether the task is disabled (default: false) */
   disabled?: boolean;
@@ -76,7 +76,11 @@ class Spinner {
   statusSymbol?: string | Partial<StatusSymbol>;
   isHidden?: boolean;
   private _status: SpinnerStatus;
-  private statusChangeHandlers: ((newStatus: SpinnerStatus) => void)[] = [];
+  private statusChangeHandlers: ((
+    newStatus: SpinnerStatus,
+    data?: any
+  ) => void)[] = [];
+  private _data?: any;
 
   constructor(
     initialMessage: string,
@@ -94,11 +98,20 @@ class Spinner {
   set status(newStatus: SpinnerStatus) {
     if (this._status !== newStatus) {
       this._status = newStatus;
-      this.statusChangeHandlers.forEach((handler) => handler(newStatus));
+      this.statusChangeHandlers.forEach((handler) =>
+        handler(newStatus, this._data)
+      );
     }
   }
 
-  onStatusChange(handler: (newStatus: SpinnerStatus) => void): void {
+  setStatusWithData(newStatus: SpinnerStatus, data?: any) {
+    this._data = data;
+    this.status = newStatus;
+  }
+
+  onStatusChange(
+    handler: (newStatus: SpinnerStatus, data?: any) => void
+  ): void {
     this.statusChangeHandlers.push(handler);
   }
 }
@@ -146,8 +159,7 @@ export class TaskManager {
       ((separator, symbol) => `${separator}\n${symbol}  `);
     this.headerFormatter =
       options.headerFormatter ??
-      ((title) =>
-        `${UI_SYMBOLS.BAR_START} ${color.inverse(title)}\n`);
+      ((title) => `${UI_SYMBOLS.BAR_START} ${color.inverse(title)}\n`);
 
     this.stream.on("resize", () => {
       this.rows = (this.stream as any).rows || 0;
@@ -297,14 +309,13 @@ export class TaskManager {
    */
   onStatusChange(
     index: number,
-    handler: (newStatus: SpinnerStatus) => void
+    handler: (newStatus: SpinnerStatus, data?: any) => void
   ): void {
     const spinner = this.spinners.get(index);
     if (spinner) {
       spinner.onStatusChange(handler);
     }
   }
-
   /**
    * Checks if there are any pending tasks.
    * @returns True if there are pending tasks, false otherwise
@@ -341,9 +352,9 @@ export class TaskManager {
       if (result && typeof result === "object" && "task" in result) {
         this.add(result);
       }
-      spinner.status = "success";
+      spinner.setStatusWithData("success", result);
     } catch (error) {
-      spinner.status = "error";
+      spinner.setStatusWithData("error", error);
     }
 
     if (!this.hasPendingTasks()) {
@@ -424,7 +435,7 @@ export class BaseTask implements Task {
   initialMessage: string;
   updateFn: (msg: string) => void = () => {};
   signal?: AbortSignal;
-  close: (value: Task | void) => void = () => {};
+  close: (value: Task | void | {}) => void = () => {};
   fail: (error: string | Error) => void = () => {};
 
   constructor(title = "") {
@@ -497,12 +508,7 @@ export const sequence = (...tasks: Task[]): Task => {
           tasks.splice(i + 1, 0, result);
         }
 
-        // Resolve the current task with the next task in the sequence.
-        if (i === tasks.length - 1) {
-          resolve();
-        } else {
-          resolve(tasks[i + 1]);
-        }
+        resolve(result);
       });
     };
   }
