@@ -25,7 +25,6 @@ export class ConfirmationPrompt extends BaseTask {
     process.stdin.on("keypress", this.keyPressHandler);
 
     this.signal?.addEventListener("abort", () => {
-      this.updateFn("got abort");
       this.rl.close();
       this.close();
     });
