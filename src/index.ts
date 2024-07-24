@@ -7,6 +7,7 @@ export { color };
 
 export interface StatusSymbol {
   pending: string | string[];
+  // These symbols should be single characters to avoid visual confusion.
   success: string;
   error: string;
   cancelled: string;
@@ -42,7 +43,8 @@ export interface Task {
   /** The initial message to be displayed. */
   initialMessage: string;
 
-  /** The function to execute for this task.
+  /**
+   * The function to execute for this task.
    * @param updateFn Function to update the displayed message for this task.
    * @param signal AbortSignal to handle task cancellation.
    * @returns A Promise that resolves with a new Task or void.
@@ -143,6 +145,8 @@ export class TaskManager {
   private taskPrefix: (taskSeparator: string, statusSymbol: string) => string;
   private headerFormatter: (title: string) => string;
   private isCursorHidden: boolean = false;
+  private allTasksPromise: Promise<void>;
+  private allTasksResolve: (() => void) | null = null;
 
   private constructor(options: TaskManagerOptions) {
     this.stream = options.stream || process.stdout;
@@ -165,8 +169,12 @@ export class TaskManager {
       this.rows = (this.stream as any).rows || 0;
     });
 
+    this.allTasksPromise = new Promise((resolve) => {
+      this.allTasksResolve = resolve;
+    });
+
     if (this.keepAlive) {
-      this.add(new KeepAlive());
+      this.run(new KeepAlive());
     }
   }
 
@@ -182,35 +190,27 @@ export class TaskManager {
   }
 
   /**
-   * Starts the execution of tasks and renders the spinner.
+   * Returns a promise that resolves when all tasks have finished executing.
    * @returns A promise that resolves when all tasks are completed
    */
-  run(): Promise<void> {
+  await(): Promise<void> {
+    return this.allTasksPromise;
+  }
+
+  /**
+   * Starts rendering the tasks.
+   */
+  private startRendering(): void {
     this.isRunning = true;
     this.hideCursor();
     this.stream.write("\n");
     this.render();
     this.interval = setInterval(() => this.render(), 80);
 
-    const allPromises = new Promise<void>((resolve) => {
-      this.resolveAllTasks = resolve;
-      this.tasks.forEach((task, defaultIndex) => {
-        const index = task.index ?? defaultIndex;
-        this.taskPromises.push(this.executeTask(task, index));
-      });
-    });
-
-    // Clear the interval for rendering when all tasks are completed.
-    allPromises.finally(() => {
-      this.stop();
-    });
-
     // Set up Ctrl+C handler
     process.once("SIGINT", () => {
       this.stop();
     });
-
-    return allPromises;
   }
 
   /**
@@ -231,6 +231,7 @@ export class TaskManager {
     this.showCursor();
     this.resolveAllTasks?.();
     this.resolveAllTasks = null;
+    this.allTasksResolve?.();
   }
 
   /**
@@ -278,10 +279,11 @@ export class TaskManager {
   }
 
   /**
-   * Adds new tasks to the TaskManager.
-   * @param tasks - The tasks to add
+   * Adds new tasks to the TaskManager and starts executing them immediately.
+   * @param tasks - The tasks to add and execute
+   * @returns An array of task IDs
    */
-  add(...tasks: Task[]): number[] {
+  run(...tasks: Task[]): number[] {
     const taskIds = [];
     tasks.forEach((task) => {
       if (task.disabled) return;
@@ -294,11 +296,15 @@ export class TaskManager {
       this.tasks.push(task);
       taskIds.push(newIndex);
 
-      // If the spinner is already running, start the new task immediately
-      if (this.isRunning) {
-        this.taskPromises.push(this.executeTask(task, newIndex));
-      }
+      // Start the new task immediately
+      this.taskPromises.push(this.executeTask(task, newIndex));
     });
+
+    // Start rendering if it's not already running
+    if (!this.isRunning) {
+      this.startRendering();
+    }
+
     return taskIds;
   }
 
@@ -350,7 +356,7 @@ export class TaskManager {
 
       // Queue the next task if it's returned from the current task
       if (result && typeof result === "object" && "task" in result) {
-        this.add(result);
+        this.run(result);
       }
       spinner.setStatusWithData("success", result);
     } catch (error) {
@@ -359,6 +365,7 @@ export class TaskManager {
 
     if (!this.hasPendingTasks()) {
       this.resolveAllTasks?.();
+      this.allTasksResolve?.();
     }
   }
 
@@ -482,7 +489,7 @@ export class KeepAlive extends BaseTask {
  * @param msg - The message to display
  */
 export const addMessage = (msg: string, statusSymbol?: string): void => {
-  TaskManager.getInstance().add({
+  TaskManager.getInstance().run({
     statusSymbol: statusSymbol,
     initialMessage: msg,
     task: async () => {},
@@ -490,28 +497,24 @@ export const addMessage = (msg: string, statusSymbol?: string): void => {
 };
 
 /**
- * Chains the given tasks for sequential execution.
- * @param tasks - The tasks to execute in sequence
- * @returns A new Task that represents the sequence of tasks
+ * Creates a task that executes a sequence of tasks.
+ * @param tasks The tasks to execute in sequence.
+ * @returns A new Task that represents the sequence of tasks.
  */
 export const sequence = (...tasks: Task[]): Task => {
-  // Chain all the tasks in sequence.
-  for (let i = 0; i < tasks.length; i++) {
-    const task = tasks[i];
+  tasks.forEach((task, i) => {
     const origTaskFn = task.task;
-    task.task = (updateFn, signal) => {
-      return new Promise(async (resolve) => {
-        const result = await origTaskFn(updateFn, signal);
+    task.task = async (updateFn, signal) => {
+      const result = await origTaskFn(updateFn, signal);
 
-        // if the result is a task, insert it into the sequence.
-        if (result instanceof Object && "task" in result) {
-          tasks.splice(i + 1, 0, result);
-        }
+      // If the result is a task, insert it into the sequence.
+      if (result && typeof result === "object" && "task" in result) {
+        tasks.splice(i + 1, 0, result);
+      }
 
-        resolve(result);
-      });
+      return result;
     };
-  }
+  });
 
   // Return the first task in the sequence.
   return tasks[0];
@@ -520,27 +523,31 @@ export const sequence = (...tasks: Task[]): Task => {
 /**
  * Checks if Unicode is supported in the current environment.
  * From https://www.npmjs.com/package/is-unicode-supported
- * @returns True if Unicode is supported, false otherwise
+ * @returns True if Unicode is supported, false otherwise.
  */
 function isUnicodeSupported(): boolean {
   if (process.platform !== "win32") {
     return process.env.TERM !== "linux"; // Linux console (kernel)
   }
 
-  return (
-    Boolean(process.env.WT_SESSION) || // Windows Terminal
-    Boolean(process.env.TERMINUS_SUBLIME) || // Terminus (<0.2.27)
-    process.env.ConEmuTask === "{cmd::Cmder}" || // ConEmu and cmder
-    process.env.TERM_PROGRAM === "Terminus-Sublime" ||
-    process.env.TERM_PROGRAM === "vscode" ||
-    process.env.TERM === "xterm-256color" ||
-    process.env.TERM === "alacritty" ||
-    process.env.TERMINAL_EMULATOR === "JetBrains-JediTerm"
+  const env = process.env;
+  return Boolean(
+    env.WT_SESSION || // Windows Terminal
+      env.TERMINUS_SUBLIME || // Terminus (<0.2.27)
+      env.ConEmuTask === "{cmd::Cmder}" || // ConEmu and cmder
+      env.TERM_PROGRAM === "Terminus-Sublime" ||
+      env.TERM_PROGRAM === "vscode" ||
+      env.TERM === "xterm-256color" ||
+      env.TERM === "alacritty" ||
+      env.TERMINAL_EMULATOR === "JetBrains-JediTerm"
   );
 }
 
-// Adapted from https://github.com/chalk/ansi-regex
-// @see LICENSE
+/**
+ * Regular expression for matching ANSI escape codes.
+ * Adapted from https://github.com/chalk/ansi-regex
+ * @see LICENSE
+ */
 function ansiRegex() {
   const pattern = [
     "[\\u001B\\u009B][[\\]()#;?]*(?:(?:(?:(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]+)*|[a-zA-Z\\d]+(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]*)*)?\\u0007)",
@@ -549,4 +556,10 @@ function ansiRegex() {
 
   return new RegExp(pattern, "g");
 }
+
+/**
+ * Strips ANSI escape codes from a string.
+ * @param str The string to strip.
+ * @returns The string without ANSI escape codes.
+ */
 export const strip = (str: string) => str.replace(ansiRegex(), "");

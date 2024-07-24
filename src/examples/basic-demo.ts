@@ -15,5 +15,5 @@ const exampleTask: Task = {
 const taskManager = TaskManager.getInstance({ title: " Example " });
 
 // Add and execute the task(s)
-taskManager.add(exampleTask, exampleTask, exampleTask);
+taskManager.run(exampleTask, exampleTask, exampleTask);
 await taskManager.run();

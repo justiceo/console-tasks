@@ -65,7 +65,7 @@ export class TaskTimer extends BaseTask {
     }, 100);
 
     const tm = TaskManager.getInstance();
-    const taskId = tm.add(task)[0];
+    const taskId = tm.run(task)[0];
 
     tm.onStatusChange(taskId, (status) => {
       if (status != "pending") {

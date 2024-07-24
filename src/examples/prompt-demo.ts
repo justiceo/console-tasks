@@ -11,11 +11,10 @@ const textPrompt = new TextPrompt("What is your name?", "start typing");
 const emailPrompt = new EmailPrompt("What is your email?", "hello@example.com");
 
 // Create a TaskManager instance
-const taskManager = TaskManager.getInstance({ title: " Task Status " });
+const taskManager = TaskManager.getInstance({ title: " Prompt Demo " });
 
 // Add and execute the task(s)
-const [cid] = taskManager.add(emailPrompt);
+const [cid] = taskManager.run(emailPrompt);
 taskManager.onStatusChange(cid, (status, data) => {
   logger.log(`Status: ${status}, Data: ${data}`);
-})
-await taskManager.run();
+});
