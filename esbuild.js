@@ -25,9 +25,6 @@ await (async () => {
 })();
 `;
 
-/** Whether or not you're bundling. */
-const bundle = true;
-
 /** Tell esbuild to add the shim to emitted JS. */
 const shimBanner = {
   js: ESM_REQUIRE_SHIM,
@@ -37,7 +34,7 @@ const shimBanner = {
  * ESNext + ESM, bundle: true, and require() shim in banner.
  */
 const buildOptions = {
-  entryPoints: ["./src/index.ts", "./src/examples/*.ts"],
+  entryPoints: ["src/index.ts", "src/widgets/index.ts", "src/examples/*.ts"],
   outdir: "./dist",
   format: "esm",
   target: "esnext",

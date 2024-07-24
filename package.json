@@ -1,7 +1,7 @@
 {
   "name": "console-tasks",
-  "version": "0.1.1",
-  "main": "dist/index.js",
+  "version": "0.1.5",
+  "main": "dist/widgets/index.js",
   "scripts": {
     "build": "node esbuild.js",
     "test": "jest",

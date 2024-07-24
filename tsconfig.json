@@ -11,6 +11,6 @@
       "emitDecoratorMetadata": true,
       "forceConsistentCasingInFileNames": true
     },
-    "include": ["src/**/*.ts"],
+    "include": ["src/**/*.ts", "src/examples/*.js"],
     "exclude": ["node_modules", "dist"]
   }
