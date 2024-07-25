@@ -497,6 +497,43 @@ export const addMessage = (msg: string, statusSymbol?: string): void => {
 };
 
 /**
+ * Converts a function into a task and executes it.
+ * @param fn The function to execute as a task.
+ * @param title An optional title for the task.
+ * @returns A promise that resolves when the task is completed.
+ */
+export const taskify = async <T>(
+  fn: () => Promise<T>,
+  title: string = 'Task'
+): Promise<T> => {
+  return new Promise((resolve, reject) => {
+    const task: Task = {
+      initialMessage: title,
+      task: async (updateFn, signal) => {
+        try {
+          const result = await fn();
+          return result;
+        } catch (error) {
+          updateFn(`${title} failed: ${error.message}`);
+          throw error;
+        }
+      },
+    };
+
+    const taskManager = TaskManager.getInstance();
+    const [taskId] = taskManager.run(task);
+
+    taskManager.onStatusChange(taskId, (newStatus, data) => {
+      if (newStatus === 'success') {
+        resolve(data);
+      } else if (newStatus === 'error') {
+        reject(data);
+      }
+    });
+  });
+};
+
+/**
  * Creates a task that executes a sequence of tasks.
  * @param tasks The tasks to execute in sequence.
  * @returns A new Task that represents the sequence of tasks.
