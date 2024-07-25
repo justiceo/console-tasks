@@ -146,7 +146,6 @@ export class TaskManager {
   private headerFormatter: (title: string) => string;
   private isCursorHidden: boolean = false;
   private allTasksPromise: Promise<void>;
-  private allTasksResolve: (() => void) | null = null;
 
   private constructor(options: TaskManagerOptions) {
     this.stream = options.stream || process.stdout;
@@ -169,8 +168,9 @@ export class TaskManager {
       this.rows = (this.stream as any).rows || 0;
     });
 
+    // Initialize the promise for all tasks
     this.allTasksPromise = new Promise((resolve) => {
-      this.allTasksResolve = resolve;
+      this.resolveAllTasks = resolve;
     });
 
     if (this.keepAlive) {
@@ -190,7 +190,7 @@ export class TaskManager {
   }
 
   /**
-   * Returns a promise that resolves when all tasks have finished executing.
+   * Waits for all tasks to complete.
    * @returns A promise that resolves when all tasks are completed
    */
   await(): Promise<void> {
@@ -206,6 +206,11 @@ export class TaskManager {
     this.stream.write("\n");
     this.render();
     this.interval = setInterval(() => this.render(), 80);
+    
+    // Clear the interval for rendering when all tasks are completed.
+    this.allTasksPromise.finally(() => {
+      this.stop();
+    });
 
     // Set up Ctrl+C handler
     process.once("SIGINT", () => {
@@ -231,7 +236,6 @@ export class TaskManager {
     this.showCursor();
     this.resolveAllTasks?.();
     this.resolveAllTasks = null;
-    this.allTasksResolve?.();
   }
 
   /**
@@ -296,11 +300,11 @@ export class TaskManager {
       this.tasks.push(task);
       taskIds.push(newIndex);
 
-      // Start the new task immediately
+      // Start the task immediately
       this.taskPromises.push(this.executeTask(task, newIndex));
     });
 
-    // Start rendering if it's not already running
+    // Start rendering if not already running
     if (!this.isRunning) {
       this.startRendering();
     }
@@ -365,7 +369,6 @@ export class TaskManager {
 
     if (!this.hasPendingTasks()) {
       this.resolveAllTasks?.();
-      this.allTasksResolve?.();
     }
   }
 
@@ -504,7 +507,7 @@ export const addMessage = (msg: string, statusSymbol?: string): void => {
  */
 export const taskify = async <T>(
   fn: () => Promise<T>,
-  title: string = 'Task'
+  title: string = "Task"
 ): Promise<T> => {
   return new Promise((resolve, reject) => {
     const task: Task = {
@@ -524,9 +527,9 @@ export const taskify = async <T>(
     const [taskId] = taskManager.run(task);
 
     taskManager.onStatusChange(taskId, (newStatus, data) => {
-      if (newStatus === 'success') {
+      if (newStatus === "success") {
         resolve(data);
-      } else if (newStatus === 'error') {
+      } else if (newStatus === "error") {
         reject(data);
       }
     });
