@@ -41,11 +41,15 @@ const exampleTask = {
 // Create a TaskManager instance
 const taskManager = TaskManager.getInstance({ title: " Example " });
 
-// Add and execute the tasks in parallel.
-taskManager.add(exampleTask, exampleTask, exampleTask);
-await taskManager.run();
+// Add and execute the tasks
+taskManager.run(exampleTask, exampleTask, exampleTask);
+
+// [Optional] Wait for all tasks to complete
+await taskManager.await();
+console.log("All tasks completed!");
 ```
-Which results in this
+
+Which results in this:
 
 ![Basic Demo](https://raw.githubusercontent.com/justiceo/console-tasks/main/src/examples/basic-demo.gif)
 
@@ -65,12 +69,12 @@ The `TaskManager` class is responsible for managing and executing tasks.
   - Gets or creates a singleton instance of TaskManager.
   - `options`: Configuration options for the TaskManager.
 
-- `add(...tasks: Task[]): number[]`
-  - Adds new tasks to the TaskManager.
+- `run(...tasks: Task[]): number[]`
+  - Adds new tasks to the TaskManager and starts executing them immediately.
   - Returns an array of task IDs for each of the tasks.
 
-- `run(): Promise<void>`
-  - Starts the execution of tasks and renders the spinner.
+- `await(): Promise<void>`
+  - Waits for all tasks to complete.
   - Returns a promise that resolves when all tasks are completed.
 
 - `stop(): void`
@@ -79,7 +83,7 @@ The `TaskManager` class is responsible for managing and executing tasks.
 - `update(taskId: number, message: string): void`
   - Updates the message for a specific task.
 
-- `onStatusChange(taskId: number, handler: (newStatus: SpinnerStatus) => void): void`
+- `onStatusChange(taskId: number, handler: (newStatus: SpinnerStatus, data?: any) => void): void`
   - Registers a handler for status changes of a specific task.
 
 #### TaskManagerOptions
@@ -99,7 +103,7 @@ The `Task` interface represents a task to be executed by the TaskManager.
 #### Properties
 
 - `initialMessage: string`: The initial message to be displayed.
-- `task: (updateFn: (msg: string) => void, signal: AbortSignal) => Promise<Task | void>`: The actual task function.
+- `task: (updateFn: (msg: string) => void, signal: AbortSignal) => Promise<Task | void | any>`: The actual task function.
 - `disabled?: boolean`: Whether the task is disabled (default: false).
 - `isHidden?: boolean`: When true, the task is run but its UI is not rendered.
 - `statusSymbol?: string | Partial<StatusSymbol>`: Custom status symbol to display instead of the spinner.
@@ -110,8 +114,13 @@ The `Task` interface represents a task to be executed by the TaskManager.
 - `addMessage(msg: string, statusSymbol?: string): void`
   - Adds a simple message task to the TaskManager.
 
+- `taskify<T>(fn: () => Promise<T>, title?: string): Promise<T>`
+  - Converts a function into a task and executes it.
+  - Returns a promise that resolves with the result of the function.
+
 - `sequence(...tasks: Task[]): Task`
-  - Chains the given tasks for sequential execution.
+  - Creates a task that executes a sequence of tasks.
+  - Returns a new Task that represents the sequence of tasks.
 
 ## Contributing
 
