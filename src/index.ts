@@ -117,7 +117,7 @@ class Spinner {
     this.statusChangeHandlers.push(handler);
   }
 }
-interface TaskManagerOptions {
+export interface TaskManagerOptions {
   stream?: Writable;
   title?: string;
   customStatusSymbols?: Partial<StatusSymbol>;
@@ -182,7 +182,7 @@ export class TaskManager {
     if (!TaskManager.instance) {
       TaskManager.instance = new TaskManager(options);
     }
-    if (options.stopAndRecreate) {
+    else if (options?.stopAndRecreate) {
       TaskManager.instance.stop();
       TaskManager.instance = new TaskManager(options);
     }
@@ -203,7 +203,6 @@ export class TaskManager {
   private startRendering(): void {
     this.isRunning = true;
     this.hideCursor();
-    this.stream.write("\n");
     this.render();
     this.interval = setInterval(() => this.render(), 80);
     
@@ -565,7 +564,7 @@ export const sequence = (...tasks: Task[]): Task => {
  * From https://www.npmjs.com/package/is-unicode-supported
  * @returns True if Unicode is supported, false otherwise.
  */
-function isUnicodeSupported(): boolean {
+export function isUnicodeSupported(): boolean {
   if (process.platform !== "win32") {
     return process.env.TERM !== "linux"; // Linux console (kernel)
   }
@@ -588,7 +587,7 @@ function isUnicodeSupported(): boolean {
  * Adapted from https://github.com/chalk/ansi-regex
  * @see LICENSE
  */
-function ansiRegex() {
+export function ansiRegex() {
   const pattern = [
     "[\\u001B\\u009B][[\\]()#;?]*(?:(?:(?:(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]+)*|[a-zA-Z\\d]+(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]*)*)?\\u0007)",
     "(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PR-TZcf-nq-uy=><~]))",

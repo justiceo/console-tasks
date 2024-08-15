@@ -41,6 +41,7 @@ const buildOptions = {
   platform: "node",
   banner: shimBanner,
   bundle: true,
+  sourcemap: true,
   minify: true,
 };
 esbuild.build(buildOptions);
