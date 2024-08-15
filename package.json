@@ -5,7 +5,7 @@
   "scripts": {
     "build": "node esbuild.js",
     "test": "jest",
-    "demo": "node esbuild.js; node dist/demo.js",
+    "demo": "node esbuild.js; node dist/examples/demo.js",
     "record-demo": "npm run build && cp dist/examples/demo.js src/examples/ && vhs src/examples/demo.tape"
   },
   "keywords": [
@@ -22,8 +22,6 @@
   "type": "module",
   "description": "ConsoleTasks is a NodeJs library for managing concurrent tasks in the console. It provides a clean and intuitive API for creating, executing, and monitoring tasks with a highly configurable and visually appealing progress display.",
   "dependencies": {
-    "acorn": "^8.12.1",
-    "acorn-walk": "^8.3.3",
     "picocolors": "^1.0.1",
     "sisteransi": "^1.0.5"
   },
