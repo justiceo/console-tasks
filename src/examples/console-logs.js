@@ -22,7 +22,7 @@ console.debug("This is a console.info message");
 replaceGlobalConsole({title: " Demo "});
 console.log("This is a console.log message");
 console.warn("This is a console.warn message");
-
+console.status("Time so far ");
 await sleep(1);
 console.error("This is a console.error message");
 console.debug("This is a console.info message");
@@ -37,6 +37,7 @@ const res2 = await console.confirm("Are you sure?");
 console.debug("result2: ", res2);
 console.note("This is a console.note message", "Note");
 console.debug("This is a console.debug message");
+console.endStatus("Finished");
 await resetGlobalConsoleAsync();
 console.log("This is a console.log message");
 console.warn("This is a console.warn message");

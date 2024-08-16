@@ -2,6 +2,7 @@ import { BaseTask, Task, TaskManager } from "..";
 export class Stopwatch extends BaseTask {
   index = 1100;
   unit = "s";
+  message = "Elapsed ";
   startTime = process.hrtime();
   constructor() {
     super();
@@ -10,13 +11,16 @@ export class Stopwatch extends BaseTask {
     const interval = setInterval(() => {
       const [seconds, nanoseconds] = process.hrtime(this.startTime);
       const elapsedSeconds = seconds + nanoseconds / 1e9;
-      this.updateFn(`Elapsed ${elapsedSeconds.toFixed(1)}${this.unit}`);
+      this.updateFn(`${this.message}${elapsedSeconds.toFixed(1)}${this.unit}`);
 
       if (this.signal?.aborted) {
         clearInterval(interval);
         this.close();
       }
     }, 100);
+  }
+  setMessage(message: string) {
+    this.message = message;
   }
 }
 

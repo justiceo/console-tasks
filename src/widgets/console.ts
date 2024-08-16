@@ -5,17 +5,21 @@ import { code } from "./code";
 import { InspectOptions } from "util";
 import { ConfirmationPrompt } from "./confirmation-prompt";
 import { note } from "./note";
+import { Stopwatch } from "./timer";
 
 /** Enhanced implementation of nodejs Console. */
 class ConsolePlus implements Console {
   private logger: Logger;
   private streamTask: StreamTask;
   private confirmationPrompt: ConfirmationPrompt;
+  private stopwatch: Stopwatch;
   private hasStreamingTask: boolean = false;
+  private hasStopwatchTask: boolean = false;
 
   constructor() {
     this.logger = new Logger({ enableDebug: true });
     this.streamTask = new StreamTask();
+    this.stopwatch = new Stopwatch();
   }
   log(...args: any[]): void {
     this.logger.log(...args);
@@ -55,8 +59,7 @@ class ConsolePlus implements Console {
     const [taskId] = TaskManager.getInstance().run(this.confirmationPrompt);
     return new Promise((resolve, reject) => {
       TaskManager.getInstance().onStatusChange(taskId, (status, data) => {
-        this.log("Task status: ", status, data);
-        if(typeof(data) === "boolean") {
+        if (typeof data === "boolean") {
           resolve(data);
         }
         resolve(false);
@@ -66,6 +69,23 @@ class ConsolePlus implements Console {
 
   note(content: string, title: string): void {
     TaskManager.getInstance().run(note(content, title));
+  }
+
+  status(message: string): void {
+    if (!this.hasStopwatchTask) {
+      this.stopwatch = new Stopwatch();
+      TaskManager.getInstance().run(this.stopwatch);
+      this.hasStopwatchTask = true;
+    }
+    this.stopwatch.setMessage(message);
+  }
+  endStatus(message): void {
+    if (message) {
+      this.stopwatch.setMessage(message);
+      this.stopwatch.updateFn(message);
+    }
+    this.stopwatch.close();
+    this.hasStopwatchTask = false;
   }
 
   // TODO: Implement all methods of the Console class.
