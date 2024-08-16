@@ -117,6 +117,7 @@ class Spinner {
     this.statusChangeHandlers.push(handler);
   }
 }
+
 export interface TaskManagerOptions {
   stream?: Writable;
   title?: string;
@@ -134,7 +135,10 @@ export class TaskManager {
   private interval?: NodeJS.Timeout = null;
   private previousRenderedLines = 0;
   private isRunning = false;
+  // An array of promises for each task.
   private taskPromises: Promise<void>[] = [];
+  // A promise that resolves when all tasks are completed.
+  private allTasksPromise: Promise<void>;
   private resolveAllTasks: (() => void) | null = null;
   private readonly stream: Writable;
   private rows: number;
@@ -145,7 +149,6 @@ export class TaskManager {
   private taskPrefix: (taskSeparator: string, statusSymbol: string) => string;
   private headerFormatter: (title: string) => string;
   private isCursorHidden: boolean = false;
-  private allTasksPromise: Promise<void>;
 
   private constructor(options: TaskManagerOptions) {
     this.stream = options.stream || process.stdout;
@@ -380,7 +383,7 @@ export class TaskManager {
     // Ensure cursor is hidden before rendering
     this.hideCursor();
 
-    // Preserve renderng task and filter out hidden tasks.
+    // Preserve rendering task and filter out hidden tasks.
     const sortedSpinners = Array.from(this.spinners.entries())
       .filter(([index, spinner]) => !spinner.isHidden)
       .sort(([a], [b]) => a - b);

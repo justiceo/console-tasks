@@ -1,5 +1,163 @@
 import { Logger } from "./logger";
 import { TaskManager, TaskManagerOptions } from "..";
+import { StreamTask } from "./stream";
+import { code } from "./code";
+import { InspectOptions } from "util";
+import { ConfirmationPrompt } from "./confirmation-prompt";
+import { note } from "./note";
+
+/** Enhanced implementation of nodejs Console. */
+class ConsolePlus implements Console {
+  private logger: Logger;
+  private streamTask: StreamTask;
+  private confirmationPrompt: ConfirmationPrompt;
+  private hasStreamingTask: boolean = false;
+
+  constructor() {
+    this.logger = new Logger({ enableDebug: true });
+    this.streamTask = new StreamTask();
+  }
+  log(...args: any[]): void {
+    this.logger.log(...args);
+  }
+  debug(...args: any[]): void {
+    this.logger.debug(...args);
+  }
+  info(...args: any[]): void {
+    this.logger.log(...args);
+  }
+  warn(...args: any[]): void {
+    this.logger.warn(...args);
+  }
+  error(...args: any[]): void {
+    this.logger.error(...args);
+  }
+
+  stream(chunk: string): void {
+    if (!this.hasStreamingTask) {
+      this.streamTask = new StreamTask();
+      TaskManager.getInstance().run(this.streamTask);
+      this.hasStreamingTask = true;
+    }
+    this.streamTask.stream(chunk);
+  }
+  endStream(): void {
+    this.streamTask.close();
+    this.hasStreamingTask = false;
+  }
+
+  code(codeStr: string, title?: string): void {
+    TaskManager.getInstance().run(code(codeStr, title));
+  }
+
+  confirm(question: string): Promise<boolean> {
+    this.confirmationPrompt = new ConfirmationPrompt(question);
+    const [taskId] = TaskManager.getInstance().run(this.confirmationPrompt);
+    return new Promise((resolve, reject) => {
+      TaskManager.getInstance().onStatusChange(taskId, (status, data) => {
+        this.log("Task status: ", status, data);
+        if(typeof(data) === "boolean") {
+          resolve(data);
+        }
+        resolve(false);
+      });
+    });
+  }
+
+  note(content: string, title: string): void {
+    TaskManager.getInstance().run(note(content, title));
+  }
+
+  // TODO: Implement all methods of the Console class.
+  // Run node src/examples/console-apis-demo.js to see them in action.
+
+  assert(condition?: boolean, ...data: any[]): void;
+  assert(value: any, message?: string, ...optionalParams: any[]): void;
+  assert(
+    value?: unknown,
+    message?: unknown,
+    ...optionalParams: unknown[]
+  ): void {
+    throw new Error("Method not implemented.");
+  }
+  clear(): void;
+  clear(): void;
+  clear(): void {
+    throw new Error("Method not implemented.");
+  }
+  count(label?: string): void;
+  count(label?: string): void;
+  count(label?: unknown): void {
+    throw new Error("Method not implemented.");
+  }
+  countReset(label?: string): void;
+  countReset(label?: string): void;
+  countReset(label?: unknown): void {
+    throw new Error("Method not implemented.");
+  }
+  dir(item?: any, options?: any): void;
+  dir(obj: any, options?: InspectOptions): void;
+  dir(obj?: unknown, options?: unknown): void {
+    throw new Error("Method not implemented.");
+  }
+  dirxml(...data: any[]): void;
+  dirxml(...data: any[]): void;
+  dirxml(...data: unknown[]): void {
+    throw new Error("Method not implemented.");
+  }
+  group(...data: any[]): void;
+  group(...label: any[]): void;
+  group(...label: unknown[]): void {
+    throw new Error("Method not implemented.");
+  }
+  groupCollapsed(...data: any[]): void;
+  groupCollapsed(...label: any[]): void;
+  groupCollapsed(...label: unknown[]): void {
+    throw new Error("Method not implemented.");
+  }
+  groupEnd(): void;
+  groupEnd(): void;
+  groupEnd(): void {
+    throw new Error("Method not implemented.");
+  }
+  table(tabularData?: any, properties?: string[]): void;
+  table(tabularData: any, properties?: readonly string[]): void;
+  table(tabularData?: unknown, properties?: unknown): void {
+    throw new Error("Method not implemented.");
+  }
+  time(label?: string): void;
+  time(label?: string): void;
+  time(label?: unknown): void {
+    throw new Error("Method not implemented.");
+  }
+  timeEnd(label?: string): void;
+  timeEnd(label?: string): void;
+  timeEnd(label?: unknown): void {
+    throw new Error("Method not implemented.");
+  }
+  timeLog(label?: string, ...data: any[]): void;
+  timeLog(label?: string, ...data: any[]): void;
+  timeLog(label?: unknown, ...data: unknown[]): void {
+    throw new Error("Method not implemented.");
+  }
+  timeStamp(label?: string): void;
+  timeStamp(label?: string): void;
+  timeStamp(label?: unknown): void {
+    throw new Error("Method not implemented.");
+  }
+  trace(...data: any[]): void;
+  trace(message?: any, ...optionalParams: any[]): void;
+  trace(message?: unknown, ...optionalParams: unknown[]): void {
+    throw new Error("Method not implemented.");
+  }
+  Console: console.ConsoleConstructor;
+  profile(label?: string): void {
+    throw new Error("Method not implemented.");
+  }
+  profileEnd(label?: string): void {
+    throw new Error("Method not implemented.");
+  }
+}
 
 // Store the original console
 const originalConsole = console;
@@ -7,45 +165,11 @@ let taskManager = null;
 
 // Function to replace the global console
 export function replaceGlobalConsole(options?: TaskManagerOptions) {
-  // Create a new object with the same properties as the original console
-  const newConsole: Console = Object.create(null);
-
+  // Intantiate the task manager with any provided options.
   taskManager = TaskManager.getInstance(options);
 
-  // Create a new Logger instance
-  const logger = new Logger({ enableDebug: true });
-
-  // Map console methods to Logger methods
-  const methodMap = {
-    log: "log",
-    debug: "debug",
-    info: "log",
-    warn: "warn",
-    error: "error",
-  };
-
-  // Iterate over all properties of the original console
-  for (const prop in console) {
-    if (typeof console[prop] === "function") {
-      if (prop in methodMap) {
-        // If the property is in our method map, use the corresponding Logger method
-        newConsole[prop] = (...args: any[]) => {
-          logger[methodMap[prop]](...args);
-        };
-      } else {
-        // For other methods, just use the original function
-        newConsole[prop] = (...args: any[]) => {
-          originalConsole[prop](...args);
-        };
-      }
-    } else {
-      // For non-function properties, just copy them
-      newConsole[prop] = console[prop];
-    }
-  }
-
   // Replace the global console
-  global.console = newConsole as Console;
+  global.console = new ConsolePlus();
 }
 
 // Function to reset the global console to the original

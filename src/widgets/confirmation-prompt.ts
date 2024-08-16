@@ -57,9 +57,7 @@ export class ConfirmationPrompt extends BaseTask {
       this.updateUI();
       this.close("Aborted");
     } else {
-      this.updateFn(
-        `pressed ${key.name}, ${chunk}, ${key.ctrl}, ${key.sequence}`
-      );
+      // Show notification for invalid key press.
     }
   };
 
@@ -82,8 +80,10 @@ export class ConfirmationPrompt extends BaseTask {
       ? color.bgRed(this.declineText)
       : color.bgGreen(this.confirmText);
 
+    const cancelled = color.inverse(" cancelled ");
+
     const renderedOptions = this.isCancelled
-      ? "Cancelled"
+      ? cancelled
       : this.isFinalized
       ? resolvedOptions
       : pendingOptions;
