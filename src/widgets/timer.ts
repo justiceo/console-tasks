@@ -3,18 +3,27 @@ export class Stopwatch extends BaseTask {
   index = 1100;
   unit = "s";
   message = "Elapsed ";
-  startTime = process.hrtime();
+  startTime: [number, number];
+  interval: NodeJS.Timeout;
   constructor() {
     super();
   }
+
+  beforeClose(): void {
+    if (this.interval) {
+      clearInterval(this.interval);
+    }
+  }
+
   initialize() {
-    const interval = setInterval(() => {
+    this.startTime = process.hrtime();
+    this.interval = setInterval(() => {
       const [seconds, nanoseconds] = process.hrtime(this.startTime);
       const elapsedSeconds = seconds + nanoseconds / 1e9;
       this.updateFn(`${this.message}${elapsedSeconds.toFixed(1)}${this.unit}`);
 
       if (this.signal?.aborted) {
-        clearInterval(interval);
+        clearInterval(this.interval);
         this.close();
       }
     }, 100);

@@ -18,8 +18,6 @@ class ConsolePlus implements Console {
 
   constructor() {
     this.logger = new Logger({ enableDebug: true });
-    this.streamTask = new StreamTask();
-    this.stopwatch = new Stopwatch();
   }
   log(...args: any[]): void {
     this.logger.log(...args);
@@ -52,6 +50,14 @@ class ConsolePlus implements Console {
 
   code(codeStr: string, title?: string): void {
     TaskManager.getInstance().run(code(codeStr, title));
+  }
+
+  stop(): void {
+    TaskManager.getInstance().stop();
+  }
+
+  idle(): Promise<void> {
+    return TaskManager.getInstance().idle();
   }
 
   confirm(question: string): Promise<boolean> {
@@ -181,7 +187,7 @@ class ConsolePlus implements Console {
 
 // Store the original console
 const originalConsole = console;
-let taskManager = null;
+let taskManager: TaskManager = null;
 
 // Function to replace the global console
 export function replaceGlobalConsole(options?: TaskManagerOptions) {
@@ -195,7 +201,7 @@ export function replaceGlobalConsole(options?: TaskManagerOptions) {
 // Function to reset the global console to the original
 export async function resetGlobalConsoleAsync() {
   if (taskManager) {
-    await taskManager.await();
+    await taskManager.idle();
   }
   global.console = originalConsole;
 }

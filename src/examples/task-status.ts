@@ -31,4 +31,4 @@ const taskManager = TaskManager.getInstance({ title: " Task Status " });
 
 // Add and execute the task(s)
 taskManager.run(cancelledTask, successTask, failedTask);
-await taskManager.await();
+await taskManager.idle();

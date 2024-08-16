@@ -138,8 +138,8 @@ export class TaskManager {
   private isRunning = false;
   // An array of promises for each task.
   private taskPromises: Promise<void>[] = [];
-  // A promise that resolves when all tasks are completed.
-  private allTasksPromise: Promise<void>;
+  // A promise that resolves when all pending tasks are completed.
+  private isIdlePromise: Promise<void>;
   private resolveAllTasks: (() => void) | null = null;
   private readonly stream: Writable;
   private rows: number;
@@ -197,7 +197,7 @@ export class TaskManager {
     this.taskPromises = [];
     this.previousRenderedLines = 0;
     this.abortController = new AbortController();
-    this.allTasksPromise = new Promise((resolve) => {
+    this.isIdlePromise = new Promise((resolve) => {
       this.resolveAllTasks = resolve;
     });
   }
@@ -206,8 +206,8 @@ export class TaskManager {
    * Waits for all tasks to complete.
    * @returns A promise that resolves when all tasks are completed
    */
-  await(): Promise<void> {
-    return this.allTasksPromise;
+  idle(): Promise<void> {
+    return this.isIdlePromise;
   }
 
   /**
@@ -476,6 +476,9 @@ export class BaseTask implements Task {
   // Defers initialization to the derived class, after the task is started.
   initialize() {}
 
+  // Hook for subclasses to perform cleanup before closing the task.
+  beforeClose() {}
+
   task: Task["task"] = async (updateFn, signal) => {
     this.updateFn = updateFn;
     this.signal = signal;
@@ -495,7 +498,10 @@ export class BaseTask implements Task {
           return;
         }
 
-        this.close = resolve;
+        this.close = () => {
+          this.beforeClose();
+          resolve();
+        }
         this.fail = reject;
       });
     } finally {
