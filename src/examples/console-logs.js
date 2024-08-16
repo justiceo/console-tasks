@@ -19,7 +19,7 @@ console.warn("This is a console.warn message");
 console.error("This is a console.error message");
 console.debug("This is a console.info message");
 // Replace global console.
-replaceGlobalConsole({keepAlive: true});
+replaceGlobalConsole({title: " Demo "});
 console.log("This is a console.log message");
 console.warn("This is a console.warn message");
 

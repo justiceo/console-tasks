@@ -130,6 +130,7 @@ export interface TaskManagerOptions {
 
 export class TaskManager {
   private static instance?: TaskManager = null;
+  private static hasRenderedTitle = false;
   private tasks: Task[] = [];
   private spinners: Map<number, Spinner> = new Map();
   private interval?: NodeJS.Timeout = null;
@@ -154,7 +155,6 @@ export class TaskManager {
     this.stream = options.stream || process.stdout;
     this.title = options.title;
     this.rows = (this.stream as any).rows || 0;
-    this.abortController = new AbortController();
     this.statusSymbols = {
       ...defaultStatusSymbols,
       ...options.customStatusSymbols,
@@ -171,10 +171,7 @@ export class TaskManager {
       this.rows = (this.stream as any).rows || 0;
     });
 
-    // Initialize the promise for all tasks
-    this.allTasksPromise = new Promise((resolve) => {
-      this.resolveAllTasks = resolve;
-    });
+    this.reset();
 
     if (this.keepAlive) {
       this.run(new KeepAlive());
@@ -184,12 +181,25 @@ export class TaskManager {
   static getInstance(options: TaskManagerOptions = {}): TaskManager {
     if (!TaskManager.instance) {
       TaskManager.instance = new TaskManager(options);
-    }
-    else if (options?.stopAndRecreate) {
+    } else if (options?.stopAndRecreate) {
       TaskManager.instance.stop();
       TaskManager.instance = new TaskManager(options);
     }
     return TaskManager.instance;
+  }
+
+  /**
+   * Resets the internal state of the TaskManager.
+   */
+  private reset(): void {
+    this.tasks = [];
+    this.spinners = new Map();
+    this.taskPromises = [];
+    this.previousRenderedLines = 0;
+    this.abortController = new AbortController();
+    this.allTasksPromise = new Promise((resolve) => {
+      this.resolveAllTasks = resolve;
+    });
   }
 
   /**
@@ -208,11 +218,6 @@ export class TaskManager {
     this.hideCursor();
     this.render();
     this.interval = setInterval(() => this.render(), 80);
-    
-    // Clear the interval for rendering when all tasks are completed.
-    this.allTasksPromise.finally(() => {
-      this.stop();
-    });
 
     // Set up Ctrl+C handler
     process.once("SIGINT", () => {
@@ -227,17 +232,22 @@ export class TaskManager {
     if (!this.isRunning) return;
 
     this.cancelPendingTasks();
-    this.render();
-    this.isRunning = false;
-    this.abortController.abort();
+    this.render(); // Final render
+    this.stopRendering();
+    this.reset();
+  }
+
+  /**
+   * Stops the rendering process.
+   */
+  private stopRendering(): void {
     if (this.interval) {
       clearInterval(this.interval);
       this.interval = null;
     }
-    this.stream.write("\n");
+    this.isRunning = false;
     this.showCursor();
-    this.resolveAllTasks?.();
-    this.resolveAllTasks = null;
+    this.stream.write("\n");
   }
 
   /**
@@ -270,6 +280,7 @@ export class TaskManager {
         spinner.message += " (Cancelled)";
       }
     });
+    this.abortController.abort();
   }
 
   /**
@@ -290,6 +301,10 @@ export class TaskManager {
    * @returns An array of task IDs
    */
   run(...tasks: Task[]): number[] {
+    if (!this.isRunning) {
+      this.reset();
+    }
+
     const taskIds = [];
     tasks.forEach((task) => {
       if (task.disabled) return;
@@ -371,6 +386,10 @@ export class TaskManager {
 
     if (!this.hasPendingTasks()) {
       this.resolveAllTasks?.();
+      // Stop and reset for potential reuse
+      this.stop();
+      // When we return, avoid re-rendering the title.
+      TaskManager.hasRenderedTitle = true;
     }
   }
 
@@ -388,7 +407,7 @@ export class TaskManager {
       .filter(([index, spinner]) => !spinner.isHidden)
       .sort(([a], [b]) => a - b);
 
-    const header = this.title ? this.headerFormatter(this.title) : "";
+    const header = this.title && !TaskManager.hasRenderedTitle ? this.headerFormatter(this.title) : "";
     const output =
       header +
       sortedSpinners
