@@ -17,15 +17,15 @@ async function sleep(seconds, signal) {
 console.log("This is a console.log message");
 console.warn("This is a console.warn message");
 console.error("This is a console.error message");
-console.debug("This is a console.info message");
+console.debug("This is a console.debug message");
 // Replace global console.
-replaceGlobalConsole({title: " Demo "});
-console.log("This is a console.log message");
-console.warn("This is a console.warn message");
-console.status("Time so far ");
-await sleep(1);
+replaceGlobalConsole({title: " Demo ", enableDebug: false});
 console.error("This is a console.error message");
-console.debug("This is a console.info message");
+console.warn("This is a console.warn message");
+console.log("This is a console.log message");
+console.info("This is a console.info message");
+console.debug("This is a console.debug message");
+console.status("Time so far ");
 console.code("let x = 0;", "javascript");
 console.stream("This is a console.stream message. ");
 console.log("This is a console.log message in the middle of a stream");

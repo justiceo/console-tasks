@@ -10,32 +10,33 @@ export class Logger {
     this.enableDebug = enableDebug;
   }
 
-  _log(symbol, level, ...args) {    
-
-    // Format the log message with caller information
-    const caller = this.enableDebug ? `(at ${this.getCaller()})`: "";
-    // TODO: Color the message based on the log level.
-    const message = [level, caller, ...args];
-    addMessage(message.join(" "), symbol);
+  _log(symbol, message) {
+    addMessage(message, symbol);
   }
 
   debug(...args) {
     if (!this.enableDebug) {
       return;
     }
-    this._log(UI_SYMBOLS.INFO_STATUS, "DEBUG", ...args);
+    // Format the log message with caller information
+    const caller =`[${this.getCaller()}] `;
+    const message = [caller, ...args];
+    this._log(UI_SYMBOLS.INFO_STATUS, color.magenta(message.join("")));
   }  
   log(...args) {
     if (!this.enableDebug) {
       return;
     }
-    this._log(UI_SYMBOLS.INFO_STATUS, "INFO", ...args);
+    this._log(UI_SYMBOLS.INFO_STATUS, args.join(" "));
   }
   error(...args) {
-    this._log(UI_SYMBOLS.ERROR_STATUS, color.red("ERROR"), ...args);
+    this._log(UI_SYMBOLS.ERROR_STATUS, color.red(args.join(" ")));
   }
   warn(...args) {
-    this._log(UI_SYMBOLS.WARN_STATUS, color.yellow("WARN"), ...args);
+    this._log(UI_SYMBOLS.WARN_STATUS, color.yellow(args.join(" ")));
+  }
+  info(...args) {
+    this._log(UI_SYMBOLS.INFO_STATUS, color.blue(args.join(" ")));
   }
 
   /**

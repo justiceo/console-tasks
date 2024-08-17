@@ -16,8 +16,8 @@ class ConsolePlus implements Console {
   private hasStreamingTask: boolean = false;
   private hasStopwatchTask: boolean = false;
 
-  constructor() {
-    this.logger = new Logger({ enableDebug: true });
+  constructor(options?: TaskManagerOptions) {
+    this.logger = new Logger({ enableDebug: options?.enableDebug });
   }
   log(...args: any[]): void {
     this.logger.log(...args);
@@ -26,7 +26,7 @@ class ConsolePlus implements Console {
     this.logger.debug(...args);
   }
   info(...args: any[]): void {
-    this.logger.log(...args);
+    this.logger.info(...args);
   }
   warn(...args: any[]): void {
     this.logger.warn(...args);
@@ -46,6 +46,14 @@ class ConsolePlus implements Console {
   endStream(): void {
     this.streamTask.close();
     this.hasStreamingTask = false;
+  }
+
+  streamOrLog(chunk: string): void {
+    if (this.hasStreamingTask) {
+      this.stream(chunk);
+    } else {
+      this.log(chunk);
+    }
   }
 
   code(codeStr: string, title?: string): void {
@@ -195,7 +203,7 @@ export function replaceGlobalConsole(options?: TaskManagerOptions) {
   taskManager = TaskManager.getInstance(options);
 
   // Replace the global console
-  global.console = new ConsolePlus();
+  global.console = new ConsolePlus(options);
 }
 
 // Function to reset the global console to the original

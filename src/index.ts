@@ -126,6 +126,7 @@ export interface TaskManagerOptions {
   taskPrefix?: (taskSeparator: string, statusSymbol: string) => string;
   stopAndRecreate?: boolean;
   headerFormatter?: (title: string) => string;
+  enableDebug?: boolean;
 }
 
 export class TaskManager {
