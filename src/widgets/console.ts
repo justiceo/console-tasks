@@ -6,6 +6,7 @@ import { InspectOptions } from "util";
 import { ConfirmationPrompt } from "./confirmation-prompt";
 import { note } from "./note";
 import { Stopwatch } from "./timer";
+import { TextPrompt } from "./text-prompt";
 
 /** Enhanced implementation of nodejs Console. */
 class ConsolePlus implements Console {
@@ -43,6 +44,16 @@ class ConsolePlus implements Console {
     }
     this.streamTask.stream(chunk);
   }
+  
+  streamln(chunk: string): void {
+    if (!this.hasStreamingTask) {
+      this.streamTask = new StreamTask();
+      TaskManager.getInstance().run(this.streamTask);
+      this.hasStreamingTask = true;
+    }
+    this.streamTask.streamln(chunk);
+  }
+
   endStream(): void {
     this.streamTask.close();
     this.hasStreamingTask = false;
@@ -70,13 +81,23 @@ class ConsolePlus implements Console {
 
   confirm(question: string): Promise<boolean> {
     this.confirmationPrompt = new ConfirmationPrompt(question);
-    const [taskId] = TaskManager.getInstance().run(this.confirmationPrompt);
+    const [taskId, _] = TaskManager.getInstance().run(this.confirmationPrompt);
     return new Promise((resolve, reject) => {
       TaskManager.getInstance().onStatusChange(taskId, (status, data) => {
         if (typeof data === "boolean") {
           resolve(data);
         }
         resolve(false);
+      });
+    });
+  }
+
+  prompt(question: string): Promise<boolean> {
+    const prompt = new TextPrompt(question);
+    const [taskId, _] = TaskManager.getInstance().run(prompt);
+    return new Promise((resolve, reject) => {
+      TaskManager.getInstance().onStatusChange(taskId, (status, data) => {
+        resolve(data);
       });
     });
   }
@@ -93,12 +114,15 @@ class ConsolePlus implements Console {
     }
     this.stopwatch.setMessage(message);
   }
-  endStatus(message): void {
+  endStatus(message: string | Error): void {
+    const messageStr = message instanceof Error ? message.message : message;
     if (message) {
-      this.stopwatch.setMessage(message);
-      this.stopwatch.updateFn(message);
+      this.stopwatch.setMessage(messageStr);
+      this.stopwatch.updateFn(messageStr);
     }
-    this.stopwatch.close();
+    message instanceof Error
+      ? this.stopwatch.fail(messageStr)
+      : this.stopwatch.close(messageStr);
     this.hasStopwatchTask = false;
   }
 

@@ -481,7 +481,7 @@ export class BaseTask implements Task {
   initialize() {}
 
   // Hook for subclasses to perform cleanup before closing the task.
-  beforeClose() {}
+  beforeClose(value: Task | void | {}) {}
 
   task: Task["task"] = async (updateFn, signal) => {
     this.updateFn = updateFn;
@@ -502,9 +502,9 @@ export class BaseTask implements Task {
           return;
         }
 
-        this.close = () => {
-          this.beforeClose();
-          resolve();
+        this.close = (result) => {
+          this.beforeClose(result);
+          resolve(result as void);
         };
         this.fail = reject;
       });

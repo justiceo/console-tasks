@@ -1,10 +1,15 @@
 import { Task, strip, UI_SYMBOLS } from "..";
 import color from "picocolors";
 export const code: (content, title) => Task = (content, title) => {
-  const lines = `\n${content}\n`.split("\n");
+  const lines = `\n${content}`.split("\n");
+
+  if (!title) {
+    title = "";
+  }
   const titleLen = strip(title).length;
   const len = Math.max(20, titleLen) + 5;
-  const msg = lines.map((ln) => `  ${color.dim(ln)}`).join("\n");
+  // TODO: Apply color formatting if title is a language like "js" or "ts"
+  const msg = lines.join("\n");
   const output = `${color.reset(title)} ${color.gray(
     UI_SYMBOLS.BAR_H.repeat(Math.max(len - titleLen - 1, 1))
   )}\n${msg}\n${color.gray(

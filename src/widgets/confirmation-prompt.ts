@@ -26,7 +26,7 @@ export class ConfirmationPrompt extends BaseTask {
 
     this.signal?.addEventListener("abort", () => {
       this.rl.close();
-      this.close();
+      this.close(false);
     });
 
     // perform initial rendering.
