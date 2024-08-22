@@ -4,6 +4,7 @@
   "main": "dist/widgets/index.js",
   "scripts": {
     "build": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
     "test": "jest",
     "demo": "node esbuild.js; node dist/examples/demo.js",
     "record-demo": "npm run build && cp dist/examples/demo.js src/examples/ && vhs src/examples/demo.tape"

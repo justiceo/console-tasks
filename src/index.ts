@@ -166,7 +166,8 @@ export class TaskManager {
       ((separator, symbol) => `${separator}\n${symbol}  `);
     this.headerFormatter =
       options.headerFormatter ??
-      ((title) => `${UI_SYMBOLS.BAR_START} ${color.inverse(title)}\n`);
+      ((title) =>
+        title ? `${UI_SYMBOLS.BAR_START} ${color.inverse(title)}\n` : "");
 
     this.stream.on("resize", () => {
       this.rows = (this.stream as any).rows || 0;
@@ -408,7 +409,9 @@ export class TaskManager {
       .filter(([index, spinner]) => !spinner.isHidden)
       .sort(([a], [b]) => a - b);
 
-    const header = this.title && !TaskManager.hasRenderedTitle ? this.headerFormatter(this.title) : "";
+    const header = !TaskManager.hasRenderedTitle
+      ? this.headerFormatter(this.title)
+      : "";
     const output =
       header +
       sortedSpinners
@@ -502,7 +505,7 @@ export class BaseTask implements Task {
         this.close = () => {
           this.beforeClose();
           resolve();
-        }
+        };
         this.fail = reject;
       });
     } finally {
