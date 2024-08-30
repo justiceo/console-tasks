@@ -538,7 +538,8 @@ export const addMessage = (msg: string, statusSymbol?: string): void => {
  */
 export const taskify = async <T>(
   fn: () => Promise<T>,
-  title: string = "Task"
+  title: string = "Task",
+  completedMessage?: string
 ): Promise<T> => {
   return new Promise((resolve, reject) => {
     const task: Task = {
@@ -546,6 +547,9 @@ export const taskify = async <T>(
       task: async (updateFn, signal) => {
         try {
           const result = await fn();
+          if(completedMessage) {
+            updateFn(completedMessage);
+          }
           return result;
         } catch (error) {
           updateFn(`${title} failed: ${error.message}`);
