@@ -1,4 +1,4 @@
-import { BaseTask, Task, TaskManager } from "../task-api";
+import { BaseTask, Task, TaskManager } from "..";
 export class Stopwatch extends BaseTask {
   index = 1100;
   unit = "s";

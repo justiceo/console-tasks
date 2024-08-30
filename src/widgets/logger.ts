@@ -1,4 +1,4 @@
-import { addMessage, UI_SYMBOLS } from "../task-api";
+import { addMessage, UI_SYMBOLS } from "..";
 import color from "picocolors";
 
 export class Logger {
