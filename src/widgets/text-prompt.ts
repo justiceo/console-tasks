@@ -1,6 +1,6 @@
 import readline from "node:readline";
 import color from "picocolors";
-import { BaseTask, UI_SYMBOLS } from "..";
+import { BaseTask, UI_SYMBOLS } from "../task-api";
 
 export class TextPrompt extends BaseTask {
   rl: readline.Interface;

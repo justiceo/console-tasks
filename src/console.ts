@@ -1,12 +1,12 @@
-import { Logger } from "./logger";
-import { TaskManager, TaskManagerOptions } from "..";
-import { StreamTask } from "./stream";
-import { code } from "./code";
+import { Logger } from "./widgets/logger";
+import { TaskManager, TaskManagerOptions } from "./task-api";
+import { StreamTask } from "./widgets/stream";
+import { code } from "./widgets/code";
 import { InspectOptions } from "util";
-import { ConfirmationPrompt } from "./confirmation-prompt";
-import { note } from "./note";
-import { Stopwatch } from "./timer";
-import { TextPrompt } from "./text-prompt";
+import { ConfirmationPrompt } from "./widgets/confirmation-prompt";
+import { note } from "./widgets/note";
+import { Stopwatch } from "./widgets/timer";
+import { TextPrompt } from "./widgets/text-prompt";
 
 /** Enhanced implementation of nodejs Console. */
 class ConsolePlus implements Console {

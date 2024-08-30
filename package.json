@@ -1,7 +1,7 @@
 {
   "name": "console-tasks",
   "version": "0.1.9",
-  "main": "dist/widgets/index.js",
+  "main": "dist/index.js",
   "scripts": {
     "build": "node esbuild.js",
     "watch": "node esbuild.js --watch",

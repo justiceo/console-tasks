@@ -1,4 +1,4 @@
-import { TaskManager } from "../index";
+import { TaskManager } from "../task-api";
 import { ConfirmationPrompt } from "../widgets/confirmation-prompt";
 import { TextPrompt } from "../widgets/text-prompt";
 import { Logger } from "../widgets/logger";

@@ -1,4 +1,4 @@
-import { taskify } from "..";
+import { taskify } from "../task-api";
 
 await taskify(
   () => new Promise((resolve) => setTimeout(resolve, 2000)),

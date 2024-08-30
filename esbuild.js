@@ -76,7 +76,7 @@ const watchStatus = {
  * ESNext + ESM, bundle: true, and require() shim in banner.
  */
 const buildOptions = {
-  entryPoints: ["src/index.ts", "src/widgets/index.ts", "src/examples/*.ts"],
+  entryPoints: ["src/index.ts", "src/examples/*.ts"],
   outdir: "./dist",
   format: "esm",
   target: "esnext",

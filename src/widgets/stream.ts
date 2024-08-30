@@ -1,4 +1,4 @@
-import { BaseTask, UI_SYMBOLS } from "..";
+import { BaseTask, UI_SYMBOLS } from "../task-api";
 import color from "picocolors";
 
 export class StreamTask extends BaseTask {

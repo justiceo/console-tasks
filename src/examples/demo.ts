@@ -1,4 +1,4 @@
-import { TaskManager, sequence, addMessage, color, Task, UI_SYMBOLS } from "..";
+import { TaskManager, sequence, addMessage, color, Task, UI_SYMBOLS } from "../task-api";
 import { StreamTask } from "../widgets/stream";
 import { Logger } from "../widgets/logger";
 import { note } from "../widgets/note";

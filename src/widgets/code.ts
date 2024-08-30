@@ -1,4 +1,4 @@
-import { Task, strip, UI_SYMBOLS } from "..";
+import { Task, strip, UI_SYMBOLS } from "../task-api";
 import color from "picocolors";
 export const code: (content, title) => Task = (content, title) => {
   const lines = `\n${content}`.split("\n");

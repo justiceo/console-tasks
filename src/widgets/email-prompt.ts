@@ -1,6 +1,6 @@
 import color from "picocolors";
 import { TextPrompt } from "./text-prompt";
-import { UI_SYMBOLS } from "..";
+import { UI_SYMBOLS } from "../task-api";
 
 export class EmailPrompt extends TextPrompt {
   constructor(prompt: string, placeholder?: string) {

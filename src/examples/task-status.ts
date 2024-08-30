@@ -1,4 +1,4 @@
-import { Task, TaskManager } from "../index";
+import { Task, TaskManager } from "../task-api";
 
 // Define a task
 const successTask: Task = {
