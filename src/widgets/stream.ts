@@ -9,21 +9,8 @@ export class StreamTask extends BaseTask {
   stream(text: string) {
     this.rawText += (this.activeLine ? "\n\n" : "") + text;
     this.activeLine = false;
-    const width = Math.min(process.stdout.columns ?? 80, 50);
-    const [firstLine, ...rest] = this.smartLineBreak(this.rawText, width).split(
-      "\n"
-    );
-    const formattedText =
-      color.blue(firstLine) +
-      (rest.length > 0
-        ? "\n" +
-          rest
-            .map(
-              (line) => `${color.reset(UI_SYMBOLS.BAR)}  ${color.blue(line)}`
-            )
-            .join("\n")
-        : "");
-    this.updateFn(formattedText);
+    const width = Math.min(process.stdout.columns ?? 80, 50);    
+    this.updateFn( this.multiLineFormat(this.rawText, width));
   }
 
   streamln(text: string) {
@@ -33,6 +20,22 @@ export class StreamTask extends BaseTask {
       this.stream(text);
     }
     this.activeLine = true;
+  }
+
+  multiLineFormat(text, width = process.stdout.columns, txtColor = "reset") {
+    const [firstLine, ...rest] = this.smartLineBreak(text, width).split("\n");
+    const formattedText =
+      color[txtColor](firstLine) +
+      (rest.length > 0
+        ? "\n" +
+          rest
+            .map(
+              (line) =>
+                `${color.reset(UI_SYMBOLS.BAR)}  ${color[txtColor](line)}`
+            )
+            .join("\n")
+        : "");
+    return formattedText;
   }
 
   smartLineBreak(text, maxLineLength = 120) {
