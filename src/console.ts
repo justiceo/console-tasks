@@ -44,7 +44,7 @@ class ConsolePlus implements Console {
     }
     this.streamTask.stream(chunk);
   }
-  
+
   streamln(chunk: string): void {
     if (!this.hasStreamingTask) {
       this.streamTask = new StreamTask();
@@ -221,7 +221,31 @@ class ConsolePlus implements Console {
 const originalConsole = console;
 let taskManager: TaskManager = null;
 
-// Function to replace the global console
+/** Options for configuring the console. */
+export interface ConsoleOptions extends TaskManagerOptions {
+  /** Whether to override the global console. */
+  overrideGlobalConsole?: boolean;
+}
+
+/** Function to configure the console with options. */
+export function configureConsole(options?: ConsoleOptions) {
+  if (taskManager) {
+    taskManager.stop();
+  }
+
+  taskManager = TaskManager.getInstance(options);
+
+  global.consolex = new ConsolePlus(options);
+  if (options?.overrideGlobalConsole) {
+    global.console = global.consolex;
+  } else {
+    global.console = originalConsole;
+  }
+}
+
+/** Function to replace the global console
+ * @deprecated
+ */
 export function replaceGlobalConsole(options?: TaskManagerOptions) {
   // Intantiate the task manager with any provided options.
   taskManager = TaskManager.getInstance(options);
@@ -230,7 +254,9 @@ export function replaceGlobalConsole(options?: TaskManagerOptions) {
   global.console = new ConsolePlus(options);
 }
 
-// Function to reset the global console to the original
+/** Function to reset the global console to the original
+ * @deprecated
+ */
 export async function resetGlobalConsoleAsync() {
   if (taskManager) {
     await taskManager.idle();
