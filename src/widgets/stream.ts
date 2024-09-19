@@ -1,21 +1,96 @@
 import { BaseTask, UI_SYMBOLS } from "..";
 import color from "picocolors";
 
+interface Hook {
+  startSequence: string;
+  endSequence: string;
+  callback: (event: "chunk" | "end", data?: string) => string;
+}
+
 export class StreamTask extends BaseTask {
   rawText = "";
   initialMessage: string = "";
   statusSymbol = UI_SYMBOLS.BAR;
   activeLine = false;
+  hooks: Map<string, Hook> = new Map(); // Using Map for single hook per startSequence
+  processedSequences: Map<string, string> = new Map();
+
+  addHook(
+    startSequence: string,
+    endSequence: string,
+    callback: (event: "chunk" | "end", data?: string) => string
+  ) {
+    this.hooks.set(startSequence, { startSequence, endSequence, callback });
+  }
+
+  processHooks(text: string): string {
+    let processedText = text;
+
+    for (const [startSequence, hook] of this.hooks.entries()) {
+      let startIndex = processedText.indexOf(hook.startSequence);
+
+      // Continue processing while we keep finding startSequence in the text
+      while (startIndex !== -1) {
+        const endIndex = processedText.indexOf(
+          hook.endSequence,
+          startIndex + hook.startSequence.length
+        );
+
+        if (endIndex === -1) {
+          // Only start sequence found (partial match)
+          const chunkData = processedText.slice(
+            startIndex + hook.startSequence.length
+          );
+          const processedChunk = hook.callback("chunk", chunkData);
+          processedText =
+            processedText.slice(0, startIndex + hook.startSequence.length) +
+            processedChunk;
+        } else {
+          // Both start and end sequences found
+          const innerData = processedText.slice(
+            startIndex + hook.startSequence.length,
+            endIndex
+          );
+          const sequenceKey = `${startIndex}-${endIndex}-${hook.startSequence}-${hook.endSequence}`;
+
+          let processedData: string;
+          if (this.processedSequences.has(sequenceKey)) {
+            processedData = this.processedSequences.get(sequenceKey)!;
+          } else {
+            processedData = hook.callback("end", innerData);
+            this.processedSequences.set(sequenceKey, processedData);
+          }
+
+          // Replace the original text with processed data
+          processedText =
+            processedText.slice(0, startIndex) +
+            processedData +
+            processedText.slice(endIndex + hook.endSequence.length);
+        }
+
+        // Continue searching for the next occurrence of the startSequence
+        startIndex = processedText.indexOf(
+          hook.startSequence,
+          startIndex + hook.startSequence.length
+        );
+      }
+    }
+
+    return processedText;
+  }
+
   stream(text: string) {
     this.rawText += (this.activeLine ? "\n\n" : "") + text;
     this.activeLine = false;
-    const width = Math.min(process.stdout.columns ?? 80, 50);    
-    this.updateFn( this.multiLineFormat(this.rawText, width));
+    const width = Math.min(process.stdout.columns ?? 80, 50);
+    const processedText = this.processHooks(this.rawText);
+    this.updateFn(this.multiLineFormat(processedText, width));
   }
 
   streamln(text: string) {
+    // TODO: Fix the issue of two streamln calls in a row having an extra newline in between them.
     if (this.rawText) {
-      this.stream("\n" + text);
+      this.stream("\n" + text); // This is the problem, as it modifies activeLine.
     } else {
       this.stream(text);
     }

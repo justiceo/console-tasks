@@ -55,7 +55,9 @@ class ConsolePlus implements Console {
   }
 
   endStream(): void {
-    this.streamTask.close();
+    if (this.streamTask) {
+      this.streamTask.close();
+    }
     this.hasStreamingTask = false;
   }
 
