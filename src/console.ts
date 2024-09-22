@@ -7,6 +7,7 @@ import { ConfirmationPrompt } from "./widgets/confirmation-prompt";
 import { note } from "./widgets/note";
 import { Stopwatch } from "./widgets/timer";
 import { TextPrompt } from "./widgets/text-prompt";
+import { FileHandler } from "./widgets/file-handler";
 
 /** Enhanced implementation of nodejs Console. */
 class ConsolePlus implements Console {
@@ -39,6 +40,7 @@ class ConsolePlus implements Console {
   stream(chunk: string): void {
     if (!this.hasStreamingTask) {
       this.streamTask = new StreamTask();
+      this.streamTask.addHook(FileHandler);
       TaskManager.getInstance().run(this.streamTask);
       this.hasStreamingTask = true;
     }

@@ -1,6 +1,6 @@
 import { TaskManager } from "../../dist/index.js";
 import { StreamTask } from "../../dist/index.js";
-import { FileHandler } from "./file-handler.js";
+import { FileHandler } from "../widgets/file-handler.js";
 
 function sleep(seconds, signal) {
   if (signal?.aborted) return Promise.resolve();
