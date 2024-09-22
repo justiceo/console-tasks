@@ -2,6 +2,20 @@ import fs from 'fs';
 import path from 'path';
 import color from 'picocolors';
 
+
+function shortenPath(absolutePath) {
+  const parts = absolutePath.split(path.sep);
+  const fileName = parts.pop();
+  const dirName = parts.pop();
+  
+  if (dirName) {
+    const prefix = parts.length > 0 ? '...' + path.sep : '';
+    return `${prefix}${dirName}${path.sep}${fileName}`;
+  } else {
+    return fileName;
+  }
+}
+
 export const FileHandler = {
   startSequence: '```',
   endSequence: '```',
@@ -48,6 +62,8 @@ export const FileHandler = {
         writeFile = pathMatch[2] === ':W';
         content = lines.slice(2).join('\n')
       }
+    } else {
+      content = lines.slice(1).join('\n');
     }
 
     return { path: filePath, content, writeFile, language };
@@ -62,11 +78,15 @@ export const FileHandler = {
     if (!data) return '';
 
     const { path: filePath, content, writeFile, language } = this.extractPathAndContent(data);
+    let linesToRender = Math.min(8, process.stdout.rows - 10);
+    if(linesToRender < 2) {
+      linesToRender = 2;
+    }
 
     if (event === 'chunk') {
-      const lastLines = this.getLastNLines(content, 5);
-      const title = filePath || language || '';
-      return `==== ${color.inverse(` ${title} `)} ====\n${lastLines}\n====\n`;
+      const lastLines = this.getLastNLines(content, linesToRender);
+      const title = shortenPath(filePath || language || '');
+      return `==== ${color.inverse(` ${title} `)}\n${lastLines}\n====\n`;
     } else if (event === 'end') {
       if (writeFile && filePath) {
         try {
@@ -79,9 +99,9 @@ export const FileHandler = {
         }
       }
 
-      const lastLines = this.getLastNLines(content, 5);
-      const title = filePath || language || '';
-      return `==== ${color.inverse(` ${title} `)} ====\n${lastLines}\n====\n`;
+      const lastLines = this.getLastNLines(content, linesToRender);
+      const title = shortenPath(filePath || language || '');
+      return `==== ${color.inverse(` ${title} `)}\n${lastLines}\n====\n`;
     }
 
     return '';

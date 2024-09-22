@@ -92,7 +92,7 @@ export class StreamTask extends BaseTask {
   }
 
   multiLineFormat(text, width = process.stdout.columns, txtColor = "reset") {
-    const [firstLine, ...rest] = this.smartLineBreak(text, width).split("\n");
+    const [firstLine, ...rest] = this.getLines(text, width);
     const formattedText =
       color[txtColor](firstLine) +
       (rest.length > 0
@@ -107,6 +107,46 @@ export class StreamTask extends BaseTask {
     return formattedText;
   }
 
+  getLines(inputString, displayWidth) {
+    // Split the input string by newline characters
+    const originalLines = inputString.split('\n');
+    const result = [];
+  
+    for (let line of originalLines) {  
+      // If a line is empty or shorter than the width, add it as is
+      if (line.length <= displayWidth) {
+        result.push(line);
+        continue;
+      }
+  
+      // Wrap the line if it's longer than the width
+      let remainingText = line;
+      while (remainingText.length > displayWidth) {
+        // Find the last space within the width
+        let breakIndex = remainingText.lastIndexOf(' ', displayWidth);
+  
+        // If no space found, break at the width
+        if (breakIndex === -1) {
+          breakIndex = displayWidth;
+        }
+  
+        // Add the wrapped portion to the result
+        result.push(remainingText.slice(0, breakIndex).trim());
+  
+        // Update the remaining text
+        remainingText = remainingText.slice(breakIndex).trim();
+      }
+  
+      // Add any remaining text as the last line
+      if (remainingText.length > 0) {
+        result.push(remainingText);
+      }
+    }
+  
+    return result;
+  }
+
+  // @deprecated
   smartLineBreak(text, maxLineLength = 120) {
     if (!text || typeof text !== "string") {
       return text;
