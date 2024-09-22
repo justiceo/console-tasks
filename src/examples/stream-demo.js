@@ -48,13 +48,28 @@ streamTask.addHook(FileHandler);
 
 streamText(`Lorem ipsum dolor sit amet, consectetur adipiscing elit. Quicksort code:
 
-    Now some file updates:
-\`\`\`js
-// example/test2.txt:W
+File update no language or file
+\`\`\`
 
     Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6\nLine 7\nLine 8\nLine 9\nLine 10
-
+    Line 11\nLine 12\nLine 13\nLine 14\nLine 15\nLine 16\nLine 17\nLine 18\nLine 19\nLine 20
 \`\`\`
+
+    Now some file updates:
+\`\`\`js
+// example/test.txt:W
+
+    Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6\nLine 7\nLine 8\nLine 9\nLine 10
+    Line 11\nLine 12\nLine 13\nLine 14\nLine 15\nLine 16\nLine 17\nLine 18\nLine 19\nLine 20
+\`\`\`
+
+    File update without file path
+\`\`\`javscript
+
+    Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6\nLine 7\nLine 8\nLine 9\nLine 10
+    Line 11\nLine 12\nLine 13\nLine 14\nLine 15\nLine 16\nLine 17\nLine 18\nLine 19\nLine 20
+\`\`\`
+
 
     Now some code updates
     <code>

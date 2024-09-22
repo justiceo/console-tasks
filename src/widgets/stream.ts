@@ -38,9 +38,7 @@ export class StreamTask extends BaseTask {
             startIndex + hook.startSequence.length
           );
           const processedChunk = hook.callback("chunk", chunkData);
-          processedText =
-            processedText.slice(0, startIndex + hook.startSequence.length) +
-            processedChunk;
+          processedText = processedText.slice(0, startIndex) + processedChunk;
         } else {
           // Both start and end sequences found
           const innerData = processedText.slice(

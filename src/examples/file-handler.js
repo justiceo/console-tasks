@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import color from 'picocolors';
 
 export const FileHandler = {
   startSequence: '```',
@@ -45,7 +46,7 @@ export const FileHandler = {
       if (pathMatch) {
         filePath = pathMatch[1].trim();
         writeFile = pathMatch[2] === ':W';
-        content = lines.slice(2).join('\n').trim();
+        content = lines.slice(2).join('\n')
       }
     }
 
@@ -64,7 +65,8 @@ export const FileHandler = {
 
     if (event === 'chunk') {
       const lastLines = this.getLastNLines(content, 5);
-      return `${filePath || language || ''}\n${lastLines}`;
+      const title = filePath || language || '';
+      return `==== ${color.inverse(` ${title} `)} ====\n${lastLines}\n====\n`;
     } else if (event === 'end') {
       if (writeFile && filePath) {
         try {
@@ -78,7 +80,8 @@ export const FileHandler = {
       }
 
       const lastLines = this.getLastNLines(content, 5);
-      return `${filePath || language || ''}\n${lastLines}`;
+      const title = filePath || language || '';
+      return `==== ${color.inverse(` ${title} `)} ====\n${lastLines}\n====\n`;
     }
 
     return '';
