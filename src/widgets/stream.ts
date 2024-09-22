@@ -15,12 +15,8 @@ export class StreamTask extends BaseTask {
   hooks: Map<string, Hook> = new Map(); // Using Map for single hook per startSequence
   processedSequences: Map<string, string> = new Map();
 
-  addHook(
-    startSequence: string,
-    endSequence: string,
-    callback: (event: "chunk" | "end", data?: string) => string
-  ) {
-    this.hooks.set(startSequence, { startSequence, endSequence, callback });
+  addHook(hook: Hook) {
+    this.hooks.set(hook.startSequence, hook);
   }
 
   processHooks(text: string): string {

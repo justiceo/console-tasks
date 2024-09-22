@@ -2,25 +2,54 @@ import fs from 'fs';
 import path from 'path';
 
 export const FileHandler = {
-  startSequence: '<file>',
-  endSequence: '</file>',
+  startSequence: '```',
+  endSequence: '```',
 
-  extractPathAndContent(data, isChunk = false) {
-    const pathMatch = data.match(/<path>(.*?)<\/path>/);
-    let contentMatch;
-
-    if (isChunk) {
-      // For chunks, make the closing </content> tag optional
-      contentMatch = data.match(/<content>([\s\S]*?)(<\/content>)?$/);
-    } else {
-      // For complete data, require the closing </content> tag
-      contentMatch = data.match(/<content>([\s\S]*?)<\/content>/);
+  extractPathAndContent(data) {
+    const lines = data.split('\n');
+    
+    // Ensure we have at least two lines
+    if (lines.length < 2) {
+      return { path: null, content: data, writeFile: false, language: '' };
     }
 
-    return {
-      path: pathMatch ? pathMatch[1] : '',
-      content: contentMatch ? contentMatch[1] : '',
-    };
+    // First line is the code block language
+    const language = lines[0].trim().replace('```', '');
+    const secondLine = lines[1].trim();
+
+    // Define comment patterns to check
+    const commentPatterns = [
+      { start: '//', end: '' },      // Single-line comment
+      { start: '<!--', end: '-->' }, // HTML comment
+      { start: '/*', end: '*/' },    // Multi-line comment
+      { start: '#', end: '' }        // Python-style comment
+    ];
+
+    let filePath = null;
+    let writeFile = false;
+    let content = data;
+
+    // Check if the second line matches any comment pattern
+    const matchedPattern = commentPatterns.find(pattern => 
+      secondLine.startsWith(pattern.start) && (pattern.end === '' || secondLine.endsWith(pattern.end))
+    );
+
+    if (matchedPattern) {
+      // Extract file path and check for :W suffix
+      const cleanedLine = secondLine
+        .replace(matchedPattern.start, '')
+        .replace(matchedPattern.end, '')
+        .trim();
+      const pathMatch = cleanedLine.match(/(.*?)(:W)?$/);
+      
+      if (pathMatch) {
+        filePath = pathMatch[1].trim();
+        writeFile = pathMatch[2] === ':W';
+        content = lines.slice(2).join('\n').trim();
+      }
+    }
+
+    return { path: filePath, content, writeFile, language };
   },
 
   getLastNLines(content, n) {
@@ -31,23 +60,25 @@ export const FileHandler = {
   callback(event, data) {
     if (!data) return '';
 
-    const { path: filePath, content } = this.extractPathAndContent(data, event === 'chunk');
+    const { path: filePath, content, writeFile, language } = this.extractPathAndContent(data);
 
     if (event === 'chunk') {
       const lastLines = this.getLastNLines(content, 5);
-      return `${filePath}\n${lastLines}`;
+      return `${filePath || language || ''}\n${lastLines}`;
     } else if (event === 'end') {
-      try {
-        const dirPath = path.dirname(filePath);
-        fs.mkdirSync(dirPath, { recursive: true });
-        fs.writeFileSync(filePath, content);
-        console.log(`File saved: ${filePath}`);
-      } catch (error) {
-        console.error(`Error saving file: ${error}`);
+      if (writeFile && filePath) {
+        try {
+          const dirPath = path.dirname(filePath);
+          fs.mkdirSync(dirPath, { recursive: true });
+          fs.writeFileSync(filePath, content);
+          console.log(`File saved: ${filePath}`);
+        } catch (error) {
+          console.error(`Error saving file: ${error}`);
+        }
       }
 
       const lastLines = this.getLastNLines(content, 5);
-      return `${filePath}\n${lastLines}`;
+      return `${filePath || language || ''}\n${lastLines}`;
     }
 
     return '';
