@@ -2,6 +2,10 @@ import color from "picocolors";
 import { TextPrompt } from "./text-prompt";
 import { UI_SYMBOLS } from "..";
 
+/**
+ * EmailPrompt class extends the TextPrompt class to handle email-specific input.
+ * It provides methods to validate and update the UI for email input.
+ */
 export class EmailPrompt extends TextPrompt {
   constructor(prompt: string, placeholder?: string) {
     super(prompt, placeholder);
