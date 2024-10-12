@@ -128,6 +128,7 @@ export interface TaskManagerOptions {
   stopAndRecreate?: boolean;
   headerFormatter?: (title: string) => string;
   enableDebug?: boolean;
+  renderIntervalMs?: number;
 }
 
 export class TaskManager {
@@ -152,6 +153,7 @@ export class TaskManager {
   private taskPrefix: (taskSeparator: string, statusSymbol: string) => string;
   private headerFormatter: (title: string) => string;
   private isCursorHidden: boolean = false;
+  private renderIntervalMs: number = 80;
 
   private constructor(options: TaskManagerOptions) {
     this.stream = options.stream || process.stdout;
@@ -173,6 +175,10 @@ export class TaskManager {
     this.stream.on("resize", () => {
       this.rows = (this.stream as any).rows || 0;
     });
+
+    if(options.renderIntervalMs) {
+      this.renderIntervalMs = options.renderIntervalMs;
+    }
 
     this.reset();
 
@@ -218,9 +224,8 @@ export class TaskManager {
    */
   private startRendering(): void {
     this.isRunning = true;
-    this.hideCursor();
     this.render();
-    this.interval = setInterval(() => this.render(), 80);
+    this.interval = setInterval(() => this.render(), this.renderIntervalMs);
 
     // Set up Ctrl+C handler
     process.once("SIGINT", () => {
