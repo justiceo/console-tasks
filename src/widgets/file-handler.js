@@ -78,6 +78,7 @@ export const FileHandler = {
     if (!data) return '';
 
     const { path: filePath, content, writeFile, language } = this.extractPathAndContent(data);
+    const bg = writeFile ? color.bgRed : color.bgBlue;
     let linesToRender = Math.min(8, process.stdout.rows - 10);
     if(linesToRender < 2) {
       linesToRender = 2;
@@ -86,7 +87,7 @@ export const FileHandler = {
     if (event === 'chunk') {
       const lastLines = this.getLastNLines(content, linesToRender);
       const title = shortenPath(filePath || language || '');
-      return `==== ${color.inverse(` ${title} `)}\n${lastLines}\n====\n`;
+      return `==== ${bg(` ${title} `)}\n${lastLines}\n====\n`;
     } else if (event === 'end') {
       if (writeFile && filePath) {
         try {
@@ -101,7 +102,7 @@ export const FileHandler = {
 
       const lastLines = this.getLastNLines(content, linesToRender);
       const title = shortenPath(filePath || language || '');
-      return `==== ${color.inverse(` ${title} `)}\n${lastLines}\n====\n`;
+      return `==== ${bg(` ${title} `)}\n${lastLines}\n====\n`;
     }
 
     return '';
