@@ -64,6 +64,11 @@ export interface Task {
   /** Custom status symbol to display instead of the spinner */
   statusSymbol?: string | Partial<StatusSymbol>;
 
+  /** Custom separator to use before this task's status symbol */
+  taskSeparator?: string;
+
+  contentPadding?: string;
+
   /** Optional index for positioning the task in the console output.
    * Indexes overwrite the existing task at that position if it exists.
    * Use carefully to avoid overlapping tasks.
@@ -78,6 +83,8 @@ class Spinner {
   message: string;
   statusSymbol?: string | Partial<StatusSymbol>;
   isHidden?: boolean;
+  taskSeparator?: string;
+  contentPadding?: string;
   private _status: SpinnerStatus;
   private statusChangeHandlers: ((
     newStatus: SpinnerStatus,
@@ -124,7 +131,13 @@ export interface TaskManagerOptions {
   title?: string;
   customStatusSymbols?: Partial<StatusSymbol>;
   keepAlive?: boolean;
-  taskPrefix?: (taskSeparator: string, statusSymbol: string) => string;
+  taskSeparator?: string;
+  contentPadding?: string;
+  taskPrefix?: (
+    taskSeparator: string,
+    statusSymbol: string,
+    contentPadding: string
+  ) => string;
   stopAndRecreate?: boolean;
   headerFormatter?: (title: string) => string;
   enableDebug?: boolean;
@@ -150,7 +163,13 @@ export class TaskManager {
   private title?: string;
   private readonly statusSymbols: StatusSymbol;
   private keepAlive: boolean;
-  private taskPrefix: (taskSeparator: string, statusSymbol: string) => string;
+  private defaultTaskSeparator: string;
+  private defaultContentPadding: string;
+  private taskPrefix: (
+    taskSeparator: string,
+    statusSymbol: string,
+    contentPadding: string
+  ) => string;
   private headerFormatter: (title: string) => string;
   private isCursorHidden: boolean = false;
   private renderIntervalMs: number = 80;
@@ -164,9 +183,12 @@ export class TaskManager {
       ...options.customStatusSymbols,
     };
     this.keepAlive = options.keepAlive || false;
+    this.defaultTaskSeparator = options.taskSeparator ?? UI_SYMBOLS.BAR + "\n";
+    this.defaultContentPadding = options.contentPadding ?? "  ";
     this.taskPrefix =
       options.taskPrefix ??
-      ((separator, symbol) => `${separator}\n${symbol}  `);
+      ((separator, symbol, contentPadding) =>
+        `${separator}${symbol}${contentPadding}`);
     this.headerFormatter =
       options.headerFormatter ??
       ((title) =>
@@ -176,7 +198,7 @@ export class TaskManager {
       this.rows = (this.stream as any).rows || 0;
     });
 
-    if(options.renderIntervalMs) {
+    if (options.renderIntervalMs) {
       this.renderIntervalMs = options.renderIntervalMs;
     }
 
@@ -321,6 +343,9 @@ export class TaskManager {
       const spinner = new Spinner(task.initialMessage);
       spinner.statusSymbol = task.statusSymbol;
       spinner.isHidden = task.isHidden;
+      spinner.contentPadding =
+        task.contentPadding ?? this.defaultContentPadding;
+      spinner.taskSeparator = task.taskSeparator ?? this.defaultTaskSeparator;
       this.spinners.set(newIndex, spinner);
       this.tasks.push(task);
       taskIds.push(newIndex);
@@ -410,7 +435,7 @@ export class TaskManager {
     // Ensure cursor is hidden before rendering
     this.hideCursor();
 
-    // Preserve rendering task and filter out hidden tasks.
+    // Preserve rendering task order and filter out hidden tasks.
     const sortedSpinners = Array.from(this.spinners.entries())
       .filter(([index, spinner]) => !spinner.isHidden)
       .sort(([a], [b]) => a - b);
@@ -423,9 +448,13 @@ export class TaskManager {
       sortedSpinners
         .map(([_, spinner]) => {
           const statusSymbol = this.getStatusSymbol(spinner);
-          return `${this.taskPrefix(UI_SYMBOLS.BAR, statusSymbol)}${
-            spinner.message
-          }`;
+          const contentPadding =
+            spinner.contentPadding ?? this.defaultContentPadding;
+          return `${this.taskPrefix(
+            spinner.taskSeparator,
+            statusSymbol,
+            contentPadding
+          )}${spinner.message}`;
         })
         .join("\n");
 

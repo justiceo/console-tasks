@@ -10,10 +10,10 @@ interface Hook {
 export class StreamTask extends BaseTask {
   rawText = "";
   initialMessage: string = "";
-  statusSymbol = UI_SYMBOLS.BAR;
   activeLine = false;
   hooks: Map<string, Hook> = new Map(); // Using Map for single hook per startSequence
   processedSequences: Map<string, string> = new Map();
+  contentPadding = "  "
 
   addHook(hook: Hook) {
     this.hooks.set(hook.startSequence, hook);
@@ -77,7 +77,7 @@ export class StreamTask extends BaseTask {
     this.rawText += (this.activeLine ? "\n\n" : "") + text;
     this.activeLine = false;
     const width = Math.min(process.stdout.columns ?? 80, 50);
-    const processedText = this.processHooks(this.rawText);
+    const processedText = "\n" + this.processHooks(this.rawText) + "\n";
     this.updateFn(this.multiLineFormat(processedText, width));
   }
 
@@ -100,7 +100,7 @@ export class StreamTask extends BaseTask {
           rest
             .map(
               (line) =>
-                `${color.reset(UI_SYMBOLS.BAR)}  ${color[txtColor](line)}`
+                `${color.reset(UI_SYMBOLS.BAR)}${this.contentPadding}${color[txtColor](line)}`
             )
             .join("\n")
         : "");

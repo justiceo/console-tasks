@@ -10,15 +10,17 @@ export const code: (content, title) => Task = (content, title) => {
   const len = Math.max(20, titleLen) + 5;
   // TODO: Apply color formatting if title is a language like "js" or "ts"
   const msg = lines.join("\n");
-  const output = `${color.reset(title)} ${color.gray(
+  const output = `${color.reset(title)}${color.gray(
     UI_SYMBOLS.BAR_H.repeat(Math.max(len - titleLen - 1, 1))
   )}\n${msg}\n${color.gray(
-    UI_SYMBOLS.BAR_START + UI_SYMBOLS.BAR_H.repeat(len + 2)
+    UI_SYMBOLS.BAR_START + UI_SYMBOLS.BAR_H.repeat(len - 1)
   )}`;
   // try UI_SYMBOLS.CONNECT_LEFT
 
   return {
     initialMessage: "",
+    statusSymbol: UI_SYMBOLS.BAR_END,
+    contentPadding: "",
     task: async (updateFn, signal) => {
       updateFn(output);
     },

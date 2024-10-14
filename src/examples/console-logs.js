@@ -1,4 +1,4 @@
-import { replaceGlobalConsole, resetGlobalConsoleAsync } from "../../dist/widgets/index.js";
+import { replaceGlobalConsole, resetGlobalConsoleAsync, color } from "../../dist/index.js";
 
 async function sleep(seconds, signal) {
     if (signal?.aborted) return Promise.resolve();
@@ -26,7 +26,7 @@ console.log("This is a console.log message");
 console.info("This is a console.info message");
 console.debug("This is a console.debug message");
 console.status("Time so far ");
-console.code("let x = 0;", "javascript");
+console.code("let x = 0;", color.inverse(" javascript "));
 console.stream("This is a console.stream message.\n");
 console.log("This is a console.log message in the middle of a stream");
 console.stream("Yet another console.stream message\n");
