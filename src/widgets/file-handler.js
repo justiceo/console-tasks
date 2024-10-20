@@ -89,20 +89,21 @@ export const FileHandler = {
       const title = shortenPath(filePath || language || '');
       return `==== ${bg(` ${title} `)}\n${lastLines}\n====\n`;
     } else if (event === 'end') {
+      let writeError = '';
       if (writeFile && filePath) {
         try {
           const dirPath = path.dirname(filePath);
           fs.mkdirSync(dirPath, { recursive: true });
           fs.writeFileSync(filePath, content);
-          console.log(`File saved: ${filePath}`);
         } catch (error) {
-          console.error(`Error saving file: ${error}`);
+          writeError = error.message;
         }
       }
 
       const lastLines = this.getLastNLines(content, linesToRender);
       const title = shortenPath(filePath || language || '');
-      return `==== ${bg(` ${title} `)}\n${lastLines}\n====\n`;
+      const suffix = writeError ? bg(writeError) : '';
+      return `==== ${bg(` ${title} `)}\n${lastLines}\n====${suffix}\n`;
     }
 
     return '';
