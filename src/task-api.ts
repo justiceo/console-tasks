@@ -502,6 +502,7 @@ export class TaskManager {
 }
 
 export class BaseTask implements Task {
+  index: number;
   initialMessage: string;
   updateFn: (msg: string) => void = () => {};
   signal?: AbortSignal;

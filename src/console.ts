@@ -1,11 +1,10 @@
 import { Logger } from "./widgets/logger";
-import { TaskManager, TaskManagerOptions } from "./task-api";
+import { TaskManager, TaskManagerOptions, BaseTask } from "./task-api";
 import { StreamTask } from "./widgets/stream";
 import { code } from "./widgets/code";
 import { InspectOptions } from "util";
 import { ConfirmationPrompt } from "./widgets/confirmation-prompt";
 import { note } from "./widgets/note";
-import { Stopwatch } from "./widgets/timer";
 import { TextPrompt } from "./widgets/text-prompt";
 import { FileHandler } from "./widgets/file-handler";
 
@@ -14,9 +13,9 @@ class ConsolePlus implements Console {
   private logger: Logger;
   private streamTask: StreamTask;
   private confirmationPrompt: ConfirmationPrompt;
-  private stopwatch: Stopwatch;
+  private statusTask: BaseTask;
   private hasStreamingTask: boolean = false;
-  private hasStopwatchTask: boolean = false;
+  private hasStatusTask: boolean = false;
 
   constructor(options?: TaskManagerOptions) {
     this.logger = new Logger({ enableDebug: options?.enableDebug });
@@ -111,23 +110,23 @@ class ConsolePlus implements Console {
   }
 
   status(message: string): void {
-    if (!this.hasStopwatchTask) {
-      this.stopwatch = new Stopwatch();
-      TaskManager.getInstance().run(this.stopwatch);
-      this.hasStopwatchTask = true;
+    if (!this.hasStatusTask) {
+      this.statusTask = new BaseTask();
+      this.statusTask.index = 900;
+      TaskManager.getInstance().run(this.statusTask);
+      this.hasStatusTask = true;
     }
-    this.stopwatch.setMessage(message);
+    this.statusTask.updateFn(message);
   }
   endStatus(message: string | Error): void {
     const messageStr = message instanceof Error ? message.message : message;
     if (message) {
-      this.stopwatch.setMessage(messageStr);
-      this.stopwatch.updateFn(messageStr);
+      this.statusTask.updateFn(messageStr);
     }
     message instanceof Error
-      ? this.stopwatch.fail(messageStr)
-      : this.stopwatch.close(messageStr);
-    this.hasStopwatchTask = false;
+      ? this.statusTask.fail(messageStr)
+      : this.statusTask.close(messageStr);
+    this.hasStatusTask = false;
   }
 
   // TODO: Implement all methods of the Console class.
